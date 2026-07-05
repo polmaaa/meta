@@ -822,6 +822,14 @@
                         <div class="sidebar-stat-value" id="side-profit-factor">0.00</div>
                     </div>
                 </div>
+                <!-- Filter Selector -->
+                <div style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                    <label style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase;">Filter:</label>
+                    <select id="sidebar-filter" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.75rem; font-weight: 600; outline: none; cursor: pointer;" onchange="updateSidebarFilter()">
+                        <option value="in_range" style="background: var(--surface-color);">Inside Chart Range</option>
+                        <option value="all" style="background: var(--surface-color);">All Trades (Limit 200)</option>
+                    </select>
+                </div>
                 <div class="trades-list" id="sidebar-trades-list">
                     <!-- Dynamic trade items -->
                 </div>
@@ -1099,11 +1107,23 @@
             }
         }
 
-        // Helper to convert date strings to timestamps
+        // Helper to convert date strings to timestamps (cross-browser robust parsing)
         function parseDatetimeStr(dtStr) {
             if (!dtStr || typeof dtStr !== 'string') return 0;
-            const cleanStr = dtStr.replace(/\./g, '-'); // YYYY.MM.DD -> YYYY-MM-DD
-            return Date.parse(cleanStr) / 1000;
+            // Matches "YYYY.MM.DD HH:MM:SS" or "YYYY-MM-DD HH:MM:SS"
+            const parts = dtStr.split(/[\s.:-]+/);
+            if (parts.length < 6) return 0;
+            
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1; // 0-indexed month
+            const day = parseInt(parts[2], 10);
+            const hour = parseInt(parts[3], 10);
+            const minute = parseInt(parts[4], 10);
+            const second = parseInt(parts[5], 10);
+            
+            // Construct as UTC date
+            const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+            return date.getTime() / 1000;
         }
 
         // Update trade markers and draw on chart
@@ -1224,31 +1244,56 @@
             const listContainer = document.getElementById('sidebar-trades-list');
             listContainer.innerHTML = '';
             
-            // Filter positions relevant to the current loaded market data time boundary
-            const filtered = positions.filter(pos => {
-                const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
-                return openTimeSec >= minTime && openTimeSec <= maxTime;
-            });
-            
-            if (filtered.length === 0) {
+            if (!positions || positions.length === 0) {
                 sidebar.style.display = 'none';
                 return;
             }
             
-            // Show sidebar
+            // Show sidebar always if there are positions
             sidebar.style.display = 'flex';
             if (mainChart) {
                 const mainContainer = document.getElementById('main-chart-container');
                 mainChart.resize(mainContainer.clientWidth, mainContainer.clientHeight);
             }
             
+            const filterVal = document.getElementById('sidebar-filter').value;
+            let displayList = [];
+            
+            if (filterVal === 'in_range') {
+                displayList = positions.filter(pos => {
+                    const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
+                    return openTimeSec >= minTime && openTimeSec <= maxTime;
+                });
+                
+                if (displayList.length === 0) {
+                    listContainer.innerHTML = `
+                        <div style="color: var(--text-secondary); text-align: center; padding: 2rem 1rem; font-size: 0.8rem; line-height: 1.5;">
+                            No trades found in the current chart time range.<br>
+                            <span style="color: var(--primary-color)">Try switching to "All Trades"</span> or upload market data matching these dates.
+                        </div>
+                    `;
+                    // Reset stats
+                    document.getElementById('side-total-trades').innerText = '0';
+                    document.getElementById('side-winrate').innerText = '0%';
+                    document.getElementById('side-winrate').className = 'sidebar-stat-value';
+                    document.getElementById('side-net-profit').innerText = '0.00';
+                    document.getElementById('side-net-profit').className = 'sidebar-stat-value';
+                    document.getElementById('side-profit-factor').innerText = '0.00';
+                    document.getElementById('side-profit-factor').className = 'sidebar-stat-value';
+                    return;
+                }
+            } else {
+                displayList = positions;
+            }
+            
+            // Calculate stats for whatever set is chosen
             let netProfit = 0;
             let wins = 0;
             let losses = 0;
             let grossProfit = 0;
             let grossLoss = 0;
             
-            filtered.forEach(pos => {
+            displayList.forEach(pos => {
                 netProfit += pos.profit;
                 if (pos.profit >= 0) {
                     wins++;
@@ -1257,11 +1302,22 @@
                     losses++;
                     grossLoss += Math.abs(pos.profit);
                 }
+            });
+            
+            // Limit rendering of DOM items to first 200 for performance
+            const limit = 200;
+            const renderList = displayList.slice(0, limit);
+            
+            renderList.forEach(pos => {
+                const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
+                const isInRange = openTimeSec >= minTime && openTimeSec <= maxTime;
                 
-                // Add to list UI
                 const item = document.createElement('div');
                 item.className = 'trade-item';
-                const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
+                if (!isInRange) {
+                    item.style.opacity = '0.55';
+                }
+                
                 item.onclick = () => jumpToTime(openTimeSec);
                 
                 const isWin = pos.profit >= 0;
@@ -1278,18 +1334,30 @@
                         <div class="trade-time-row">
                             <span>Close: ${pos.closeTime} (Price: ${pos.closePrice.toFixed(2)})</span>
                         </div>
-                        <span>Lot Size: ${pos.volume}</span>
+                        <div class="trade-time-row" style="margin-top: 0.15rem;">
+                            <span>Lot Size: ${pos.volume}</span>
+                            ${!isInRange ? '<span style="color: var(--bearish-color); font-size: 0.65rem; font-weight:600;">Out of Range</span>' : '<span style="color: var(--bullish-color); font-size: 0.65rem; font-weight:600;">In Chart</span>'}
+                        </div>
                         <div class="trade-comment">${pos.comment || ''}</div>
                     </div>
                 `;
                 listContainer.appendChild(item);
             });
             
+            // If we truncated the list, display a footer note
+            if (displayList.length > limit) {
+                const note = document.createElement('div');
+                note.style.cssText = 'color: var(--text-secondary); text-align: center; font-size: 0.75rem; padding: 0.5rem;';
+                note.innerText = `Showing first ${limit} of ${displayList.length} trades`;
+                listContainer.appendChild(note);
+            }
+            
             // Update stats labels
-            const winRate = filtered.length > 0 ? (wins / filtered.length) * 100 : 0;
+            const totalCount = displayList.length;
+            const winRate = totalCount > 0 ? (wins / totalCount) * 100 : 0;
             const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : grossProfit > 0 ? 99.9 : 0.0;
             
-            document.getElementById('side-total-trades').innerText = filtered.length;
+            document.getElementById('side-total-trades').innerText = totalCount;
             document.getElementById('side-winrate').innerText = `${winRate.toFixed(1)}%`;
             document.getElementById('side-winrate').className = `sidebar-stat-value ${winRate >= 50 ? 'up' : 'down'}`;
             
@@ -1299,6 +1367,16 @@
             
             document.getElementById('side-profit-factor').innerText = profitFactor.toFixed(2);
             document.getElementById('side-profit-factor').className = `sidebar-stat-value ${profitFactor >= 1.0 ? 'up' : 'down'}`;
+        }
+
+        // Triggered when sidebar filter select changes
+        function updateSidebarFilter() {
+            if (!rawHistoryData || rawM1Data.length === 0) return;
+            const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
+            const offsetSeconds = offsetHours * 3600;
+            const minTime = rawM1Data[0].time;
+            const maxTime = rawM1Data[rawM1Data.length - 1].time;
+            populateSidebar(rawHistoryData.positions || [], minTime, maxTime, offsetSeconds);
         }
 
         // Aggregates M1 data to different timeframes
