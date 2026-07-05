@@ -774,7 +774,7 @@
                 </div>
 
                 <!-- Chart Toolbar controls -->
-            <div class="chart-toolbar">
+            <div class="chart-toolbar" style="gap: 0.5rem; justify-content: space-between;">
                 <div class="toolbar-group">
                     <span class="toolbar-label">Timeframe:</span>
                     <div class="btn-group">
@@ -786,8 +786,7 @@
                     </div>
                 </div>
 
-                <div class="toolbar-group">
-                    <span class="toolbar-label">Technical Indicators:</span>
+                <div class="toolbar-group" style="gap: 0.35rem; flex-wrap: wrap;">
                     <button class="toggle-btn" data-indicator="ema" onclick="toggleIndicator('ema')">
                         <i data-lucide="activity"></i> EMA (20)
                     </button>
@@ -867,7 +866,7 @@
             <!-- Trades Sidebar -->
             <div class="trades-sidebar" id="trades-sidebar">
                 <div class="sidebar-header">
-                    <div class="sidebar-title">Trade History Analyzer</div>
+                    <div class="sidebar-title">Trade History</div>
                     <button class="toggle-btn" style="padding: 0.25rem 0.5rem;" onclick="toggleSidebarView()"><i data-lucide="x"></i></button>
                 </div>
                 <div class="sidebar-stats">
@@ -1284,7 +1283,9 @@
 
         // Handle timezone offset changes in both static and simulation modes
         function handleTimezoneOffsetChange() {
-            if (isSimulating) {
+            const simBar = document.getElementById('simulation-bar');
+            const isReplayOpen = simBar && simBar.style.display !== 'none';
+            if (isReplayOpen) {
                 const currentSimTime = rawM1Data[simCurrentIndex] ? rawM1Data[simCurrentIndex].time : 0;
                 updateTradeMarkersForSim(currentSimTime);
             } else {
