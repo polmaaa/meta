@@ -690,7 +690,7 @@
             <!-- Timezone Offset -->
             <div style="display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.25rem 0.75rem; background: rgba(0,0,0,0.2);">
                 <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Offset:</label>
-                <select id="timezone-offset" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.8125rem; font-weight: 600; outline: none; cursor: pointer;" onchange="updateTradeMarkers()">
+                <select id="timezone-offset" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.8125rem; font-weight: 600; outline: none; cursor: pointer;" onchange="handleTimezoneOffsetChange()">
                     <option value="0" style="background: var(--surface-color);">GMT +0 (UTC)</option>
                     <option value="1" style="background: var(--surface-color);">GMT +1</option>
                     <option value="2" style="background: var(--surface-color);">GMT +2</option>
@@ -1280,6 +1280,16 @@
             }
         }
 
+        // Handle timezone offset changes in both static and simulation modes
+        function handleTimezoneOffsetChange() {
+            if (isSimulating) {
+                const currentSimTime = rawM1Data[simCurrentIndex] ? rawM1Data[simCurrentIndex].time : 0;
+                updateTradeMarkersForSim(currentSimTime);
+            } else {
+                updateTradeMarkers();
+            }
+        }
+
         // Update trade markers and draw on chart
         function updateTradeMarkers() {
             if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
@@ -1490,7 +1500,9 @@
             if (filterVal === 'in_range') {
                 displayList = openedPositions.filter(pos => {
                     const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
-                    return openTimeSec >= minTime;
+                    const closeTimeSec = parseDatetimeStr(pos.closeTime) + offsetSeconds;
+                    return (openTimeSec >= minTime && openTimeSec <= maxTime) || 
+                           (closeTimeSec >= minTime && closeTimeSec <= maxTime);
                 });
                 
                 if (displayList.length === 0) {
