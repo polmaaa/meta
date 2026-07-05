@@ -133,8 +133,8 @@
         /* Stats Cards Row */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 0.75rem;
         }
 
         .stat-card {
@@ -714,38 +714,40 @@
     </header>
 
     <div class="main-container">
-        <!-- Stats Bar -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Symbol & TF</div>
-                <div class="stat-value" id="stat-symbol">XAUUSD</div>
-                <div class="stat-subtext" id="stat-timeframe">Timeframe: M1</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Last Close Price</div>
-                <div class="stat-value" id="stat-price">--</div>
-                <div class="stat-subtext" id="stat-change">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Highest Range</div>
-                <div class="stat-value" id="stat-high" style="color: var(--bullish-color)">--</div>
-                <div class="stat-subtext">Peak in data range</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Lowest Range</div>
-                <div class="stat-value" id="stat-low" style="color: var(--bearish-color)">--</div>
-                <div class="stat-subtext">Trough in data range</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total Data Points</div>
-                <div class="stat-value" id="stat-candles">--</div>
-                <div class="stat-subtext">Aggregated bars</div>
-            </div>
-        </div>
-
         <div class="workspace-container">
-            <!-- Chart Container -->
-            <div class="chart-workspace" style="flex-grow: 1;">
+            <!-- Left Column: Stats & Chart -->
+            <div style="display: flex; flex-direction: column; gap: 1rem; flex-grow: 1; min-width: 0;">
+                <!-- Stats Bar -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Symbol & TF</div>
+                        <div class="stat-value" id="stat-symbol">XAUUSD</div>
+                        <div class="stat-subtext" id="stat-timeframe">Timeframe: M1</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Last Close Price</div>
+                        <div class="stat-value" id="stat-price">--</div>
+                        <div class="stat-subtext" id="stat-change">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Highest Range</div>
+                        <div class="stat-value" id="stat-high" style="color: var(--bullish-color)">--</div>
+                        <div class="stat-subtext">Peak in data range</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Lowest Range</div>
+                        <div class="stat-value" id="stat-low" style="color: var(--bearish-color)">--</div>
+                        <div class="stat-subtext">Trough in data range</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Data Points</div>
+                        <div class="stat-value" id="stat-candles">--</div>
+                        <div class="stat-subtext">Aggregated bars</div>
+                    </div>
+                </div>
+
+                <!-- Chart Container -->
+                <div class="chart-workspace" style="flex-grow: 1;">
                 <!-- Loading/Setup Overlay -->
                 <div class="chart-overlay" id="loading-overlay">
                     <div class="spinner"></div>
@@ -860,6 +862,7 @@
                     <div id="rsi-chart-container"></div>
                 </div>
             </div>
+            </div> <!-- end of left column flex wrapper -->
 
             <!-- Trades Sidebar -->
             <div class="trades-sidebar" id="trades-sidebar">
