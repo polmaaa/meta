@@ -949,6 +949,12 @@
             // Populate sidebar placeholder on load
             populateSidebar(null, 0, 0, 0);
             
+            // Listen to simulation start time changes
+            document.getElementById('sim-start-time').addEventListener('input', () => {
+                if (isSimulating) return;
+                syncSimulationToSelectedTime();
+            });
+            
             if (typeof LightweightCharts === 'undefined') {
                 showCriticalError("Charting Library Failed to Load", "The library 'lightweight-charts.js' could not be loaded. Please ensure the file is present in the folder next to chart.html.");
                 return;
@@ -1507,6 +1513,13 @@
             } else {
                 displayList = openedPositions;
             }
+            
+            // Sort displayList so that newest trades appear at the top
+            displayList.sort((a, b) => {
+                const timeA = parseDatetimeStr(a.closeTime || a.openTime);
+                const timeB = parseDatetimeStr(b.closeTime || b.openTime);
+                return timeB - timeA; // Descending order (newest first)
+            });
             
             // Calculate stats for whatever set is chosen
             let netProfit = 0;
@@ -2124,6 +2137,41 @@
             return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
         }
 
+        // Synchronize chart and sidebar state to the time selected in datetime picker
+        function syncSimulationToSelectedTime() {
+            if (rawM1Data.length === 0) return;
+            
+            const startTimeStr = document.getElementById('sim-start-time').value;
+            if (!startTimeStr) return;
+            
+            const startTimestamp = Date.parse(startTimeStr) / 1000;
+            if (isNaN(startTimestamp)) return;
+            
+            // Find closest index
+            let closestIdx = 0;
+            let minDiff = Math.abs(rawM1Data[0].time - startTimestamp);
+            for (let i = 1; i < rawM1Data.length; i++) {
+                const diff = Math.abs(rawM1Data[i].time - startTimestamp);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestIdx = i;
+                }
+            }
+            
+            simCurrentIndex = closestIdx;
+            const targetTime = rawM1Data[simCurrentIndex].time;
+            
+            // Update time label
+            const dateObj = new Date(targetTime * 1000);
+            document.getElementById('sim-progress-time').innerText = `Time: ${dateObj.toLocaleString()}`;
+            
+            // Render slice on chart
+            renderChartWorkspaceWithData(rawM1Data.slice(0, simCurrentIndex + 1));
+            
+            // Render markers and sidebar up to this time
+            updateTradeMarkersForSim(targetTime);
+        }
+
         function toggleReplayMode() {
             const simBar = document.getElementById('simulation-bar');
             const btn = document.getElementById('replay-mode-toggle-btn');
@@ -2136,6 +2184,8 @@
                 // Initialize start time value to first candle
                 if (rawM1Data.length > 0) {
                     document.getElementById('sim-start-time').value = formatTimestampToDatetimeLocal(rawM1Data[0].time);
+                    // Sync immediately
+                    syncSimulationToSelectedTime();
                 }
             } else {
                 stopSimulation();
@@ -2170,8 +2220,11 @@
                 return;
             }
             
-            // If we are starting from scratch (not paused)
-            if (!isSimulating && simCurrentIndex === 0) {
+            // If starting fresh or user changed time picker during pause
+            const currentSimTime = rawM1Data[simCurrentIndex] ? rawM1Data[simCurrentIndex].time : 0;
+            const isDifferentTime = Math.abs(currentSimTime - startTimestamp) > 60; // difference more than 1 min
+            
+            if (!isSimulating && (simCurrentIndex === 0 || isDifferentTime)) {
                 // Find closest candle index
                 let closestIdx = 0;
                 let minDiff = Math.abs(rawM1Data[0].time - startTimestamp);
@@ -2195,6 +2248,9 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
             
             const speed = parseInt(document.getElementById('sim-speed').value);
+            
+            // Execute one step immediately
+            stepSimForward();
             
             simIntervalId = setInterval(() => {
                 stepSimForward();
