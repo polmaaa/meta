@@ -909,14 +909,17 @@
 
         // Try to automatically load default trades_history (prioritizes JS global to bypass CORS)
         function loadDefaultTradeHistory() {
+            let data = null;
             if (typeof tradesHistory !== 'undefined' && tradesHistory !== null) {
-                rawHistoryData = tradesHistory;
-                updateTradeMarkers();
-                showToast("History Loaded", "Successfully loaded trades_history.js automatically.");
-                return;
+                data = tradesHistory;
             } else if (window.tradesHistory) {
-                rawHistoryData = window.tradesHistory;
+                data = window.tradesHistory;
+            }
+
+            if (data) {
+                rawHistoryData = data;
                 updateTradeMarkers();
+                triggerSidebarPopulation();
                 showToast("History Loaded", "Successfully loaded trades_history.js automatically.");
                 return;
             }
@@ -926,9 +929,10 @@
                     if (res.ok) return res.json();
                     throw new Error("trades_history.json not found");
                 })
-                .then(data => {
-                    rawHistoryData = data;
+                .then(jsonData => {
+                    rawHistoryData = jsonData;
                     updateTradeMarkers();
+                    triggerSidebarPopulation();
                     showToast("History Loaded", "Successfully loaded trades_history.json automatically.");
                 })
                 .catch(e => {
@@ -1046,6 +1050,7 @@
                     rawHistoryData = jsonData;
                     
                     updateTradeMarkers();
+                    triggerSidebarPopulation();
                     loadingOverlay.style.display = 'none';
                     showToast("Success", `Loaded trade history: ${file.name}`);
                 } catch (err) {
@@ -1181,7 +1186,23 @@
             candleSeries.setMarkers(groupedMarkers);
             
             // Populate sidebar list and stats
-            populateSidebar(activePositions, minTime, maxTime, offsetSeconds);
+            triggerSidebarPopulation();
+        }
+
+        // Trigger sidebar rendering with dynamic parameters
+        function triggerSidebarPopulation() {
+            if (!rawHistoryData) return;
+            const offsetHours = parseFloat(document.getElementById('timezone-offset').value) || 0;
+            const offsetSeconds = offsetHours * 3600;
+            
+            let minTime = 0;
+            let maxTime = 0;
+            if (rawM1Data && rawM1Data.length > 0) {
+                minTime = rawM1Data[0].time;
+                maxTime = rawM1Data[rawM1Data.length - 1].time;
+            }
+            
+            populateSidebar(rawHistoryData.positions || [], minTime, maxTime, offsetSeconds);
         }
 
         // Avoids label overlay clutter on same timestamp
