@@ -289,8 +289,8 @@
         /* Tooltip / Status info on Chart */
         .chart-legend-overlay {
             position: absolute;
-            top: 60px;
-            left: 20px;
+            top: 15px;
+            left: 15px;
             z-index: 5;
             background: rgba(21, 26, 33, 0.75);
             backdrop-filter: blur(8px);
@@ -838,26 +838,26 @@
                 </div>
             </div>
 
-                <!-- Legend Overlay inside chart -->
-                <div class="chart-legend-overlay" id="legend">
-                    <div class="legend-row" id="legend-ohlc">
-                        <div class="legend-item" style="color: var(--primary-color)"><strong style="font-size: 0.8rem">XAUUSD</strong></div>
-                        <div class="legend-item">O: <b id="l-open">-</b></div>
-                        <div class="legend-item">H: <b id="l-high">-</b></div>
-                        <div class="legend-item">L: <b id="l-low">-</b></div>
-                        <div class="legend-item">C: <b id="l-close">-</b></div>
-                        <div class="legend-item">V: <b id="l-volume">-</b></div>
-                    </div>
-                    <div class="legend-row" id="legend-indicators" style="margin-top: 0.15rem;">
-                        <div class="legend-item" id="legend-ema" style="display: none; color: var(--indicator-ema);">EMA(20): <b id="l-ema">-</b></div>
-                        <div class="legend-item" id="legend-sma" style="display: none; color: var(--indicator-sma);">SMA(50): <b id="l-sma">-</b></div>
-                        <div class="legend-item" id="legend-rsi" style="display: none; color: var(--indicator-rsi);">RSI(14): <b id="l-rsi">-</b></div>
-                    </div>
-                </div>
-
                 <!-- Charts Render Viewports -->
                 <div class="charts-container">
-                    <div id="main-chart-container"></div>
+                    <div id="main-chart-container">
+                        <!-- Legend Overlay inside chart -->
+                        <div class="chart-legend-overlay" id="legend">
+                            <div class="legend-row" id="legend-ohlc">
+                                <div class="legend-item" style="color: var(--primary-color)"><strong style="font-size: 0.8rem">XAUUSD</strong></div>
+                                <div class="legend-item">O: <b id="l-open">-</b></div>
+                                <div class="legend-item">H: <b id="l-high">-</b></div>
+                                <div class="legend-item">L: <b id="l-low">-</b></div>
+                                <div class="legend-item">C: <b id="l-close">-</b></div>
+                                <div class="legend-item">V: <b id="l-volume">-</b></div>
+                            </div>
+                            <div class="legend-row" id="legend-indicators" style="margin-top: 0.15rem;">
+                                <div class="legend-item" id="legend-ema" style="display: none; color: var(--indicator-ema);">EMA(20): <b id="l-ema">-</b></div>
+                                <div class="legend-item" id="legend-sma" style="display: none; color: var(--indicator-sma);">SMA(50): <b id="l-sma">-</b></div>
+                                <div class="legend-item" id="legend-rsi" style="display: none; color: var(--indicator-rsi);">RSI(14): <b id="l-rsi">-</b></div>
+                            </div>
+                        </div>
+                    </div>
                     <div id="rsi-chart-container"></div>
                 </div>
             </div>
