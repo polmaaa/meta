@@ -178,9 +178,8 @@
 
         /* Chart Workspace Area */
         .chart-workspace {
-            display: grid;
-            grid-template-columns: 1fr;
-            grid-template-rows: auto 1fr;
+            display: flex;
+            flex-direction: column;
             background-color: var(--surface-color);
             border: 1px solid var(--border-color);
             border-radius: 16px;
@@ -326,7 +325,7 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            height: 100%;
+            flex-grow: 1;
             background-color: #0c0d14;
         }
 
@@ -489,7 +488,7 @@
             background-color: var(--surface-color);
             border: 1px solid var(--border-color);
             border-radius: 16px;
-            display: none;
+            display: flex;
             flex-direction: column;
             box-shadow: 0 12px 32px rgba(0,0,0,0.3);
             overflow: hidden;
@@ -929,6 +928,7 @@
         let mainChart, rsiChart;
         let candleSeries, volumeSeries, emaSeries, smaSeries, rsiSeries;
         let tradeLinesArray = [];
+        let activePriceLines = []; // Stores active open order price lines
         
         // Element caching
         const loadingOverlay = document.getElementById('loading-overlay');
@@ -946,6 +946,9 @@
 
         // 1. Initial Attempt to Load from data.js or fetch local JSON
         window.addEventListener('DOMContentLoaded', () => {
+            // Populate sidebar placeholder on load
+            populateSidebar(null, 0, 0, 0);
+            
             if (typeof LightweightCharts === 'undefined') {
                 showCriticalError("Charting Library Failed to Load", "The library 'lightweight-charts.js' could not be loaded. Please ensure the file is present in the folder next to chart.html.");
                 return;
@@ -1237,11 +1240,46 @@
             }
         }
 
+        // Clear active price lines
+        function clearActivePriceLines() {
+            if (activePriceLines && activePriceLines.length > 0 && candleSeries && typeof candleSeries.removePriceLine === 'function') {
+                activePriceLines.forEach(line => {
+                    try {
+                        candleSeries.removePriceLine(line);
+                    } catch (e) {
+                        console.warn("Failed to remove price line", e);
+                    }
+                });
+            }
+            activePriceLines = [];
+        }
+
+        // Draw horizontal green dashed line for currently open grid position
+        function drawActivePriceLine(pos) {
+            if (!candleSeries || typeof candleSeries.createPriceLine !== 'function') return;
+            
+            try {
+                const priceLine = candleSeries.createPriceLine({
+                    price: pos.openPrice,
+                    color: '#0ecb81', // Green for active open grid positions (matching MT5 style)
+                    lineWidth: 1.5,
+                    lineStyle: LightweightCharts.LineStyle.Dashed,
+                    axisLabelVisible: true,
+                    title: `${pos.type.toUpperCase()} ${pos.volume}`
+                });
+                
+                activePriceLines.push(priceLine);
+            } catch (e) {
+                console.error("Failed to draw active price line", e);
+            }
+        }
+
         // Update trade markers and draw on chart
         function updateTradeMarkers() {
             if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
             
             clearConnectionLines();
+            clearActivePriceLines();
             
             const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
             const offsetSeconds = offsetHours * 3600;
@@ -1292,6 +1330,13 @@
                 if (openTimeSec > 0 && closeTimeSec > 0) {
                     if (closeTimeSec >= minTime && closeTimeSec <= maxTime) {
                         drawConnectionLine(pos, openTimeSec, closeTimeSec);
+                    }
+                }
+                
+                // Draw active price lines for currently unclosed positions (static mode fallback)
+                if (openTimeSec > 0 && (closeTimeVal === 0 || !pos.closeTime)) {
+                    if (openTimeSec >= minTime && openTimeSec <= maxTime) {
+                        drawActivePriceLine(pos);
                     }
                 }
             });
@@ -1385,31 +1430,68 @@
             listContainer.innerHTML = '';
             
             if (!positions || positions.length === 0) {
-                sidebar.style.display = 'none';
+                listContainer.innerHTML = `
+                    <div style="color: var(--text-secondary); text-align: center; padding: 3rem 1rem; font-size: 0.8rem; line-height: 1.5;">
+                        Belum ada data histori transaksi yang dimuat.<br>
+                        <span style="color: var(--primary-color); font-size: 0.75rem;">Silakan unggah histori transaksi MT5 JSON.</span>
+                    </div>
+                `;
+                // Reset stats
+                document.getElementById('side-total-trades').innerText = '0';
+                document.getElementById('side-winrate').innerText = '0%';
+                document.getElementById('side-winrate').className = 'sidebar-stat-value';
+                document.getElementById('side-net-profit').innerText = '0.00';
+                document.getElementById('side-net-profit').className = 'sidebar-stat-value';
+                document.getElementById('side-profit-factor').innerText = '0.00';
+                document.getElementById('side-profit-factor').className = 'sidebar-stat-value';
                 return;
             }
             
-            // Show sidebar always if there are positions
+            // Show sidebar always
             sidebar.style.display = 'flex';
             if (mainChart) {
                 const mainContainer = document.getElementById('main-chart-container');
                 mainChart.resize(mainContainer.clientWidth, mainContainer.clientHeight);
             }
             
+            // Filter out future trades that haven't opened yet in simulation time
+            const openedPositions = positions.filter(pos => {
+                const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
+                return openTimeSec <= maxTime;
+            });
+            
+            if (openedPositions.length === 0) {
+                listContainer.innerHTML = `
+                    <div style="color: var(--text-secondary); text-align: center; padding: 3rem 1rem; font-size: 0.8rem; line-height: 1.5;">
+                        Belum ada transaksi yang terbuka pada waktu simulasi ini.<br>
+                        <span style="color: var(--primary-color); font-size: 0.75rem;">Simulasi sedang berjalan menunggu trigger...</span>
+                    </div>
+                `;
+                // Reset stats
+                document.getElementById('side-total-trades').innerText = '0';
+                document.getElementById('side-winrate').innerText = '0%';
+                document.getElementById('side-winrate').className = 'sidebar-stat-value';
+                document.getElementById('side-net-profit').innerText = '0.00';
+                document.getElementById('side-net-profit').className = 'sidebar-stat-value';
+                document.getElementById('side-profit-factor').innerText = '0.00';
+                document.getElementById('side-profit-factor').className = 'sidebar-stat-value';
+                return;
+            }
+            
             const filterVal = document.getElementById('sidebar-filter').value;
             let displayList = [];
             
             if (filterVal === 'in_range') {
-                displayList = positions.filter(pos => {
+                displayList = openedPositions.filter(pos => {
                     const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
-                    return openTimeSec >= minTime && openTimeSec <= maxTime;
+                    return openTimeSec >= minTime;
                 });
                 
                 if (displayList.length === 0) {
                     listContainer.innerHTML = `
                         <div style="color: var(--text-secondary); text-align: center; padding: 2rem 1rem; font-size: 0.8rem; line-height: 1.5;">
-                            No trades found in the current chart time range.<br>
-                            <span style="color: var(--primary-color)">Try switching to "All Trades"</span> or upload market data matching these dates.
+                            Tidak ada transaksi di rentang waktu chart yang aktif.<br>
+                            <span style="color: var(--primary-color)">Ganti filter ke "All Trades"</span> atau geser chart ke area lain.
                         </div>
                     `;
                     // Reset stats
@@ -1423,7 +1505,7 @@
                     return;
                 }
             } else {
-                displayList = positions;
+                displayList = openedPositions;
             }
             
             // Calculate stats for whatever set is chosen
@@ -1593,8 +1675,9 @@
             document.getElementById('main-chart-container').innerHTML = '';
             document.getElementById('rsi-chart-container').innerHTML = '';
             
-            // Reset connection lines array
+            // Reset connection lines and price lines arrays
             tradeLinesArray = [];
+            activePriceLines = [];
 
             const currentData = aggregateData(rawM1Data, currentTF);
 
@@ -2240,6 +2323,7 @@
             if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
             
             clearConnectionLines();
+            clearActivePriceLines();
             
             const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
             const offsetSeconds = offsetHours * 3600;
@@ -2291,6 +2375,14 @@
                 if (openTimeSec > 0 && closeTimeSec > 0) {
                     if (closeTimeSec >= minTime && closeTimeSec <= currentSimTime) {
                         drawConnectionLine(pos, openTimeSec, closeTimeSec);
+                    }
+                }
+                
+                // Draw active price lines for currently open positions (opened but not closed yet in simulation time)
+                if (openTimeSec > 0 && openTimeSec <= currentSimTime) {
+                    const isClosedInSim = closeTimeSec > 0 && closeTimeSec <= currentSimTime;
+                    if (!isClosedInSim) {
+                        drawActivePriceLine(pos);
                     }
                 }
             });
