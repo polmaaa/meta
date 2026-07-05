@@ -1498,8 +1498,21 @@
                 mainChart.resize(mainContainer.clientWidth, mainContainer.clientHeight);
             }
             
+            const simBar = document.getElementById('simulation-bar');
+            const isReplayOpen = simBar && simBar.style.display !== 'none';
+            
+            // In Replay/Simulation Mode, filter out trades that closed before the simulation start time (minTime)
+            let filteredPositions = positions;
+            if (isReplayOpen) {
+                filteredPositions = positions.filter(pos => {
+                    const closeTimeSec = parseDatetimeStr(pos.closeTime) + offsetSeconds;
+                    // Keep if close time is after simulation start time or if it's still open (closeTimeSec <= offsetSeconds)
+                    return closeTimeSec >= minTime || closeTimeSec <= offsetSeconds;
+                });
+            }
+            
             // Filter out future trades that haven't opened yet in simulation time
-            const openedPositions = positions.filter(pos => {
+            const openedPositions = filteredPositions.filter(pos => {
                 const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
                 return openTimeSec <= maxTime;
             });
