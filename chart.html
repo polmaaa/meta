@@ -1281,6 +1281,7 @@
                 updateTradeMarkersForSim(currentSimTime);
             } else {
                 updateTradeMarkers();
+                triggerSidebarPopulation();
             }
         }
 
@@ -1374,6 +1375,8 @@
             if (rawM1Data && rawM1Data.length > 0) {
                 minTime = rawM1Data[0].time;
                 maxTime = rawM1Data[rawM1Data.length - 1].time;
+            } else {
+                maxTime = 2000000000; // Allow all positions if no market data is loaded yet
             }
             
             populateSidebar(rawHistoryData.positions || [], minTime, maxTime, offsetSeconds);
@@ -1390,6 +1393,8 @@
                 updateTradeMarkersForSim(currentSimTime);
             } else {
                 updateTradeMarkers();
+                // Always populate sidebar even if updateTradeMarkers returned early due to missing market data
+                triggerSidebarPopulation();
             }
         }
 
