@@ -745,34 +745,70 @@
                 </div>
 
                 <!-- Chart Toolbar controls -->
-                <div class="chart-toolbar">
-                    <div class="toolbar-group">
-                        <span class="toolbar-label">Timeframe:</span>
-                        <div class="btn-group">
-                            <button class="toolbar-btn active" onclick="setTimeframe(1, this)">1m</button>
-                            <button class="toolbar-btn" onclick="setTimeframe(5, this)">5m</button>
-                            <button class="toolbar-btn" onclick="setTimeframe(15, this)">15m</button>
-                            <button class="toolbar-btn" onclick="setTimeframe(30, this)">30m</button>
-                            <button class="toolbar-btn" onclick="setTimeframe(60, this)">1h</button>
-                        </div>
-                    </div>
-
-                    <div class="toolbar-group">
-                        <span class="toolbar-label">Technical Indicators:</span>
-                        <button class="toggle-btn" data-indicator="ema" onclick="toggleIndicator('ema')">
-                            <i data-lucide="activity"></i> EMA (20)
-                        </button>
-                        <button class="toggle-btn" data-indicator="sma" onclick="toggleIndicator('sma')">
-                            <i data-lucide="trending-up"></i> SMA (50)
-                        </button>
-                        <button class="toggle-btn" data-indicator="rsi" onclick="toggleIndicator('rsi')">
-                            <i data-lucide="percent"></i> RSI (14)
-                        </button>
-                        <button class="toggle-btn active" data-indicator="volume" onclick="toggleIndicator('volume')">
-                            <i data-lucide="bar-chart-2"></i> Volume
-                        </button>
+            <div class="chart-toolbar">
+                <div class="toolbar-group">
+                    <span class="toolbar-label">Timeframe:</span>
+                    <div class="btn-group">
+                        <button class="toolbar-btn active" onclick="setTimeframe(1, this)">1m</button>
+                        <button class="toolbar-btn" onclick="setTimeframe(5, this)">5m</button>
+                        <button class="toolbar-btn" onclick="setTimeframe(15, this)">15m</button>
+                        <button class="toolbar-btn" onclick="setTimeframe(30, this)">30m</button>
+                        <button class="toolbar-btn" onclick="setTimeframe(60, this)">1h</button>
                     </div>
                 </div>
+
+                <div class="toolbar-group">
+                    <span class="toolbar-label">Technical Indicators:</span>
+                    <button class="toggle-btn" data-indicator="ema" onclick="toggleIndicator('ema')">
+                        <i data-lucide="activity"></i> EMA (20)
+                    </button>
+                    <button class="toggle-btn" data-indicator="sma" onclick="toggleIndicator('sma')">
+                        <i data-lucide="trending-up"></i> SMA (50)
+                    </button>
+                    <button class="toggle-btn" data-indicator="rsi" onclick="toggleIndicator('rsi')">
+                        <i data-lucide="percent"></i> RSI (14)
+                    </button>
+                    <button class="toggle-btn active" data-indicator="volume" onclick="toggleIndicator('volume')">
+                        <i data-lucide="bar-chart-2"></i> Volume
+                    </button>
+                    <button class="toggle-btn" id="replay-mode-toggle-btn" onclick="toggleReplayMode()" style="border-color: rgba(240,185,11,0.3); color: var(--primary-color);">
+                        <i data-lucide="play-circle"></i> Replay Simulator
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation Control Bar -->
+            <div class="chart-toolbar" id="simulation-bar" style="display: none; background-color: rgba(240, 185, 11, 0.05); border-bottom: 1px solid rgba(240, 185, 11, 0.2); flex-wrap: wrap;">
+                <div class="toolbar-group">
+                    <span class="toolbar-label" style="color: var(--primary-color); font-weight: 700;">REPLAY:</span>
+                    <input type="datetime-local" id="sim-start-time" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.8125rem; outline: none; cursor: pointer;">
+                </div>
+                
+                <div class="toolbar-group">
+                    <button class="toggle-btn" id="sim-play-btn" onclick="toggleSimPlay()" style="background-color: var(--primary-color); color: #000; font-weight: 700; border: none; padding: 0.35rem 0.75rem;">
+                        <i data-lucide="play" style="width:14px; height:14px;"></i> Play
+                    </button>
+                    <button class="toggle-btn" onclick="stepSimForward()">
+                        <i data-lucide="skip-forward" style="width:14px; height:14px;"></i> Step
+                    </button>
+                    
+                    <span class="toolbar-label" style="margin-left: 0.5rem;">Speed:</span>
+                    <select id="sim-speed" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.8125rem; font-weight: 600; outline: none; cursor: pointer;" onchange="updateSimSpeed()">
+                        <option value="1000">1 bar/sec</option>
+                        <option value="500" selected>2 bars/sec</option>
+                        <option value="200">5 bars/sec</option>
+                        <option value="100">10 bars/sec</option>
+                        <option value="40">25 bars/sec</option>
+                    </select>
+                </div>
+                
+                <div class="toolbar-group">
+                    <span id="sim-progress-time" style="font-family: monospace; font-size: 0.85rem; color: var(--primary-color); font-weight: 600;">Time: --</span>
+                    <button class="toggle-btn" onclick="stopSimulation()" style="color: var(--bearish-color); border-color: rgba(246, 70, 93, 0.3);">
+                        <i data-lucide="square" style="width:12px; height:12px;"></i> Exit
+                    </button>
+                </div>
+            </div>
 
                 <!-- Legend Overlay inside chart -->
                 <div class="chart-legend-overlay" id="legend">
@@ -1872,6 +1908,275 @@
             setTimeout(() => {
                 toast.classList.remove('show');
             }, 4000);
+        }
+
+        // ==========================================
+        // REAL-TIME SIMULATION / REPLAY SYSTEM
+        // ==========================================
+        let isSimulating = false;
+        let simIntervalId = null;
+        let simCurrentIndex = 0;
+        const simBufferCount = 100; // Number of historical candles to pre-fill on chart before play starts
+
+        // Format a Unix timestamp to datetime-local picker value
+        function formatTimestampToDatetimeLocal(timestamp) {
+            const d = new Date(timestamp * 1000);
+            const pad = (n) => String(n).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            const mm = pad(d.getMonth() + 1);
+            const dd = pad(d.getDate());
+            const hh = pad(d.getHours());
+            const min = pad(d.getMinutes());
+            return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+        }
+
+        function toggleReplayMode() {
+            const simBar = document.getElementById('simulation-bar');
+            const btn = document.getElementById('replay-mode-toggle-btn');
+            
+            if (simBar.style.display === 'none') {
+                simBar.style.display = 'flex';
+                btn.classList.add('active');
+                btn.style.backgroundColor = 'rgba(240, 185, 11, 0.15)';
+                
+                // Initialize start time value to first candle
+                if (rawM1Data.length > 0) {
+                    document.getElementById('sim-start-time').value = formatTimestampToDatetimeLocal(rawM1Data[0].time);
+                }
+            } else {
+                stopSimulation();
+                simBar.style.display = 'none';
+                btn.classList.remove('active');
+                btn.style.backgroundColor = '';
+            }
+        }
+
+        function toggleSimPlay() {
+            if (isSimulating) {
+                pauseSimulation();
+            } else {
+                startSimulation();
+            }
+        }
+
+        function startSimulation() {
+            if (rawM1Data.length === 0) return;
+            
+            // Get start time
+            const startTimeStr = document.getElementById('sim-start-time').value;
+            if (!startTimeStr) {
+                showToast("Simulation Error", "Please select a valid start date/time.");
+                return;
+            }
+            
+            // Convert to unix seconds
+            const startTimestamp = Date.parse(startTimeStr) / 1000;
+            if (isNaN(startTimestamp)) {
+                showToast("Simulation Error", "Invalid date format.");
+                return;
+            }
+            
+            // If we are starting from scratch (not paused)
+            if (!isSimulating && simCurrentIndex === 0) {
+                // Find closest candle index
+                let closestIdx = 0;
+                let minDiff = Math.abs(rawM1Data[0].time - startTimestamp);
+                
+                for (let i = 1; i < rawM1Data.length; i++) {
+                    const diff = Math.abs(rawM1Data[i].time - startTimestamp);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIdx = i;
+                    }
+                }
+                
+                simCurrentIndex = closestIdx;
+                
+                // Re-render chart workspace with initial dataset slice
+                renderChartWorkspaceWithData(rawM1Data.slice(0, simCurrentIndex + 1));
+            }
+            
+            isSimulating = true;
+            document.getElementById('sim-play-btn').innerHTML = '<i data-lucide="pause" style="width:14px; height:14px;"></i> Pause';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            const speed = parseInt(document.getElementById('sim-speed').value);
+            
+            simIntervalId = setInterval(() => {
+                stepSimForward();
+            }, speed);
+        }
+
+        function pauseSimulation() {
+            isSimulating = false;
+            document.getElementById('sim-play-btn').innerHTML = '<i data-lucide="play" style="width:14px; height:14px;"></i> Play';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            if (simIntervalId) {
+                clearInterval(simIntervalId);
+                simIntervalId = null;
+            }
+        }
+
+        // Reset and restore normal layout
+        function stopSimulation() {
+            pauseSimulation();
+            simCurrentIndex = 0;
+            document.getElementById('sim-progress-time').innerText = "Time: --";
+            
+            // Reset to normal complete chart view
+            renderChartWorkspace();
+            if (rawHistoryData) {
+                updateTradeMarkers();
+            }
+        }
+
+        function updateSimSpeed() {
+            if (isSimulating) {
+                pauseSimulation();
+                startSimulation();
+            }
+        }
+
+        function stepSimForward() {
+            if (simCurrentIndex >= rawM1Data.length - 1) {
+                pauseSimulation();
+                showToast("Simulation Finished", "Reached the end of market data.");
+                return;
+            }
+            
+            simCurrentIndex++;
+            const newCandle = rawM1Data[simCurrentIndex];
+            
+            // Update time label
+            const dateObj = new Date(newCandle.time * 1000);
+            document.getElementById('sim-progress-time').innerText = `Time: ${dateObj.toLocaleString()}`;
+            
+            // Aggregate candle up to current index for the active timeframe
+            const intervalSeconds = currentTF * 60;
+            const groupTime = Math.floor(newCandle.time / intervalSeconds) * intervalSeconds;
+            
+            let blockStartIdx = simCurrentIndex;
+            while (blockStartIdx > 0 && Math.floor(rawM1Data[blockStartIdx].time / intervalSeconds) * intervalSeconds === groupTime) {
+                blockStartIdx--;
+            }
+            blockStartIdx++; // adjust back
+            
+            let high = rawM1Data[blockStartIdx].high;
+            let low = rawM1Data[blockStartIdx].low;
+            let volume = 0;
+            for (let i = blockStartIdx; i <= simCurrentIndex; i++) {
+                high = Math.max(high, rawM1Data[i].high);
+                low = Math.min(low, rawM1Data[i].low);
+                volume += rawM1Data[i].volume;
+            }
+            
+            const tfBar = {
+                time: groupTime,
+                open: rawM1Data[blockStartIdx].open,
+                high: high,
+                low: low,
+                close: newCandle.close,
+                value: volume
+            };
+            
+            // Update main candlestick and volume series
+            candleSeries.update(tfBar);
+            
+            const prevClose = blockStartIdx > 0 ? rawM1Data[blockStartIdx - 1].close : tfBar.open;
+            const volColor = tfBar.close >= prevClose ? 'rgba(14, 203, 129, 0.35)' : 'rgba(246, 70, 93, 0.35)';
+            volumeSeries.update({
+                time: groupTime,
+                value: volume,
+                color: volColor
+            });
+            
+            // Re-calculate indicators for currently simulated slice
+            const currentAggregatedData = aggregateData(rawM1Data.slice(0, simCurrentIndex + 1), currentTF);
+            
+            if (activeIndicators.ema && emaSeries) {
+                emaSeries.setData(calculateEMA(currentAggregatedData, 20));
+            }
+            if (activeIndicators.sma && smaSeries) {
+                smaSeries.setData(calculateSMA(currentAggregatedData, 50));
+            }
+            if (activeIndicators.rsi && rsiSeries) {
+                rsiSeries.setData(calculateRSI(currentAggregatedData, 14));
+            }
+            
+            // Update statistics cards
+            calculateStats(currentAggregatedData);
+            
+            // Update trade markers up to the current simulated time
+            updateTradeMarkersForSim(newCandle.time);
+            
+            // Scroll chart to follow the new candles
+            if (mainChart) {
+                mainChart.timeScale().scrollToPosition(0, true);
+            }
+        }
+
+        // Custom render workspace with a specific data slice
+        function renderChartWorkspaceWithData(dataSlice) {
+            const backup = rawM1Data;
+            rawM1Data = dataSlice;
+            renderChartWorkspace();
+            rawM1Data = backup;
+        }
+
+        // Update trade markers and sidebar during simulation
+        function updateTradeMarkersForSim(currentSimTime) {
+            if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
+            
+            const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
+            const offsetSeconds = offsetHours * 3600;
+            
+            const minTime = rawM1Data[0].time;
+            
+            const markers = [];
+            const activePositions = rawHistoryData.positions || [];
+            
+            activePositions.forEach(pos => {
+                const openTimeVal = parseDatetimeStr(pos.openTime);
+                const closeTimeVal = parseDatetimeStr(pos.closeTime);
+                
+                if (openTimeVal > 0) {
+                    const openTimeSec = openTimeVal + offsetSeconds;
+                    // Only show if the trade has opened BEFORE the current simulation time
+                    if (openTimeSec >= minTime && openTimeSec <= currentSimTime) {
+                        markers.push({
+                            time: openTimeSec,
+                            position: pos.type === 'buy' ? 'belowBar' : 'aboveBar',
+                            color: pos.type === 'buy' ? '#0ecb81' : '#f6465d',
+                            shape: pos.type === 'buy' ? 'arrowUp' : 'arrowDown',
+                            text: `${pos.type.toUpperCase()} ${pos.volume} (${pos.comment ? pos.comment.split('|')[2] : 'Grid'})`,
+                            profit: 0
+                        });
+                    }
+                }
+                
+                if (closeTimeVal > 0) {
+                    const closeTimeSec = closeTimeVal + offsetSeconds;
+                    // Only show if the trade has closed BEFORE the current simulation time
+                    if (closeTimeSec >= minTime && closeTimeSec <= currentSimTime) {
+                        markers.push({
+                            time: closeTimeSec,
+                            position: pos.type === 'buy' ? 'aboveBar' : 'belowBar',
+                            color: '#ff9800',
+                            shape: 'circle',
+                            text: `Close ${pos.type.toUpperCase()}`,
+                            profit: pos.profit || 0
+                        });
+                    }
+                }
+            });
+            
+            markers.sort((a, b) => a.time - b.time);
+            const groupedMarkers = groupOverlappingMarkers(markers);
+            candleSeries.setMarkers(groupedMarkers);
+            
+            // Populate sidebar list with only the trades that have opened before simulation time
+            populateSidebar(activePositions, minTime, currentSimTime, offsetSeconds);
         }
     </script>
 </body>
