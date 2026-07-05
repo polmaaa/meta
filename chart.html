@@ -639,6 +639,34 @@
             }
         }
 
+        /* Trades Sidebar Table Styles */
+        .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+            color: var(--text-primary);
+        }
+        .trades-table th {
+            padding: 0.45rem 0.25rem;
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.65rem;
+            border-bottom: 1px solid var(--border-color);
+            text-align: left;
+        }
+        .trades-table td {
+            padding: 0.5rem 0.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            vertical-align: middle;
+        }
+        .trades-table tr {
+            transition: background-color 0.15s ease;
+        }
+        .trades-table tr:hover {
+            background-color: var(--surface-hover);
+        }
+
         @media (max-width: 768px) {
             .chart-toolbar {
                 flex-direction: column;
@@ -900,6 +928,7 @@
         // Charts & Series references
         let mainChart, rsiChart;
         let candleSeries, volumeSeries, emaSeries, smaSeries, rsiSeries;
+        let tradeLinesArray = [];
         
         // Element caching
         const loadingOverlay = document.getElementById('loading-overlay');
@@ -1167,9 +1196,52 @@
             return date.getTime() / 1000;
         }
 
+        // Clear connection lines
+        function clearConnectionLines() {
+            if (tradeLinesArray && tradeLinesArray.length > 0) {
+                tradeLinesArray.forEach(series => {
+                    try {
+                        mainChart.removeSeries(series);
+                    } catch (e) {
+                        console.warn("Failed to remove trade line series", e);
+                    }
+                });
+            }
+            tradeLinesArray = [];
+        }
+
+        // Draw connection line between open and close
+        function drawConnectionLine(pos, openTimeSec, closeTimeSec) {
+            if (!mainChart) return;
+            const isBuy = pos.type === 'buy';
+            
+            try {
+                const lineSeries = mainChart.addSeries(LightweightCharts.LineSeries, {
+                    color: isBuy ? 'rgba(33, 150, 243, 0.45)' : 'rgba(244, 67, 54, 0.45)', // Blue for BUY, Red for SELL
+                    lineWidth: 1.5,
+                    lineStyle: LightweightCharts.LineStyle.Dashed,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                    autoscaleInfoProvider: () => null // Ignore connection lines when calculating Y-axis auto-scale
+                });
+                
+                lineSeries.setData([
+                    { time: openTimeSec, value: pos.openPrice },
+                    { time: closeTimeSec, value: pos.closePrice }
+                ]);
+                
+                tradeLinesArray.push(lineSeries);
+            } catch (e) {
+                console.error("Failed to draw connection line", e);
+            }
+        }
+
         // Update trade markers and draw on chart
         function updateTradeMarkers() {
             if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
+            
+            clearConnectionLines();
             
             const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
             const offsetSeconds = offsetHours * 3600;
@@ -1183,15 +1255,19 @@
             activePositions.forEach(pos => {
                 const openTimeVal = parseDatetimeStr(pos.openTime);
                 const closeTimeVal = parseDatetimeStr(pos.closeTime);
+                const isBuy = pos.type === 'buy';
+                
+                let openTimeSec = 0;
+                let closeTimeSec = 0;
                 
                 if (openTimeVal > 0) {
-                    const openTimeSec = openTimeVal + offsetSeconds;
+                    openTimeSec = openTimeVal + offsetSeconds;
                     if (openTimeSec >= minTime && openTimeSec <= maxTime) {
                         markers.push({
                             time: openTimeSec,
-                            position: pos.type === 'buy' ? 'belowBar' : 'aboveBar',
-                            color: pos.type === 'buy' ? '#0ecb81' : '#f6465d',
-                            shape: pos.type === 'buy' ? 'arrowUp' : 'arrowDown',
+                            position: isBuy ? 'belowBar' : 'aboveBar',
+                            color: isBuy ? '#2196f3' : '#f44336', // Blue for BUY, Red for SELL
+                            shape: isBuy ? 'arrowUp' : 'arrowDown',
                             text: `${pos.type.toUpperCase()} ${pos.volume} (${pos.comment ? pos.comment.split('|')[2] : 'Grid'})`,
                             profit: 0
                         });
@@ -1199,16 +1275,23 @@
                 }
                 
                 if (closeTimeVal > 0) {
-                    const closeTimeSec = closeTimeVal + offsetSeconds;
+                    closeTimeSec = closeTimeVal + offsetSeconds;
                     if (closeTimeSec >= minTime && closeTimeSec <= maxTime) {
                         markers.push({
                             time: closeTimeSec,
-                            position: pos.type === 'buy' ? 'aboveBar' : 'belowBar',
-                            color: '#ff9800', // orange for exit / recovery
+                            position: isBuy ? 'aboveBar' : 'belowBar',
+                            color: isBuy ? '#2196f3' : '#f44336', // Blue for BUY Close, Red for SELL Close
                             shape: 'circle',
                             text: `Close ${pos.type.toUpperCase()}`,
                             profit: pos.profit || 0
                         });
+                    }
+                }
+                
+                // Draw connection lines if the close is visible on chart
+                if (openTimeSec > 0 && closeTimeSec > 0) {
+                    if (closeTimeSec >= minTime && closeTimeSec <= maxTime) {
+                        drawConnectionLine(pos, openTimeSec, closeTimeSec);
                     }
                 }
             });
@@ -1255,7 +1338,7 @@
                     
                     if (m.text.includes('Close')) {
                         grouped[key].text = `Close Basket (${grouped[key].count} pos) P/L: ${grouped[key].totalProfit.toFixed(1)}`;
-                        grouped[key].color = '#ff9800';
+                        grouped[key].color = m.color;
                         grouped[key].shape = 'circle';
                     } else {
                         grouped[key].text = `${m.text.split(' ')[0]} x${grouped[key].count}`;
@@ -1365,46 +1448,71 @@
             const limit = 200;
             const renderList = displayList.slice(0, limit);
             
+            // Create Table Element
+            const table = document.createElement('table');
+            table.className = 'trades-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th style="width: 22%;">Waktu</th>
+                        <th style="width: 15%;">Tipe</th>
+                        <th style="width: 12%;">Lot</th>
+                        <th style="width: 33%;">Harga</th>
+                        <th style="width: 18%; text-align: right;">Laba</th>
+                    </tr>
+                </thead>
+                <tbody id="sidebar-trades-table-body"></tbody>
+            `;
+            listContainer.appendChild(table);
+            const tableBody = document.getElementById('sidebar-trades-table-body');
+            
             renderList.forEach(pos => {
                 const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
                 const isInRange = openTimeSec >= minTime && openTimeSec <= maxTime;
                 
-                const item = document.createElement('div');
-                item.className = 'trade-item';
+                const isWin = pos.profit >= 0;
+                const row = document.createElement('tr');
                 if (!isInRange) {
-                    item.style.opacity = '0.55';
+                    row.style.opacity = '0.5';
+                }
+                row.onclick = () => jumpToTime(openTimeSec);
+                
+                // Format Waktu: "dd HH:mm" (e.g. "01 12:30")
+                let displayTime = "";
+                if (pos.closeTime) {
+                    const parts = pos.closeTime.split(/[\s.:-]+/);
+                    if (parts.length >= 5) {
+                        displayTime = `${parts[2]} ${parts[3]}:${parts[4]}`;
+                    }
+                } else if (pos.openTime) {
+                    const parts = pos.openTime.split(/[\s.:-]+/);
+                    if (parts.length >= 5) {
+                        displayTime = `${parts[2]} ${parts[3]}:${parts[4]}`;
+                    }
                 }
                 
-                item.onclick = () => jumpToTime(openTimeSec);
-                
-                const isWin = pos.profit >= 0;
-                
-                item.innerHTML = `
-                    <div class="trade-item-header">
-                        <span class="trade-badge ${pos.type}">${pos.type.toUpperCase()}</span>
-                        <span class="trade-profit ${isWin ? 'up' : 'down'}">${pos.profit >= 0 ? '+' : ''}${pos.profit.toFixed(2)}</span>
-                    </div>
-                    <div class="trade-details">
-                        <div class="trade-time-row">
-                            <span>Open: ${pos.openTime} (Price: ${pos.openPrice.toFixed(2)})</span>
-                        </div>
-                        <div class="trade-time-row">
-                            <span>Close: ${pos.closeTime} (Price: ${pos.closePrice.toFixed(2)})</span>
-                        </div>
-                        <div class="trade-time-row" style="margin-top: 0.15rem;">
-                            <span>Lot Size: ${pos.volume}</span>
-                            ${!isInRange ? '<span style="color: var(--bearish-color); font-size: 0.65rem; font-weight:600;">Out of Range</span>' : '<span style="color: var(--bullish-color); font-size: 0.65rem; font-weight:600;">In Chart</span>'}
-                        </div>
-                        <div class="trade-comment">${pos.comment || ''}</div>
-                    </div>
+                row.innerHTML = `
+                    <td style="padding: 0.5rem 0.25rem; font-family: monospace; color: var(--text-secondary);">${displayTime}</td>
+                    <td style="padding: 0.5rem 0.25rem;">
+                        <span style="font-weight: 800; color: ${pos.type === 'buy' ? '#2196f3' : '#f44336'}">
+                            ${pos.type === 'buy' ? 'BUY' : 'SELL'}
+                        </span>
+                    </td>
+                    <td style="padding: 0.5rem 0.25rem; font-family: monospace;">${pos.volume.toFixed(2)}</td>
+                    <td style="padding: 0.5rem 0.25rem; font-family: monospace; color: var(--text-secondary); font-size: 0.68rem;">
+                        ${pos.openPrice.toFixed(2)}<span style="color: var(--text-muted); padding: 0 0.1rem;">→</span>${pos.closePrice.toFixed(2)}
+                    </td>
+                    <td style="padding: 0.5rem 0.25rem; text-align: right; font-weight: 700; color: ${isWin ? 'var(--bullish-color)' : 'var(--bearish-color)'}; font-family: monospace;">
+                        ${pos.profit >= 0 ? '+' : ''}${pos.profit.toFixed(2)}
+                    </td>
                 `;
-                listContainer.appendChild(item);
+                tableBody.appendChild(row);
             });
             
             // If we truncated the list, display a footer note
             if (displayList.length > limit) {
                 const note = document.createElement('div');
-                note.style.cssText = 'color: var(--text-secondary); text-align: center; font-size: 0.75rem; padding: 0.5rem;';
+                note.style.cssText = 'color: var(--text-secondary); text-align: center; font-size: 0.75rem; padding: 0.5rem; width: 100%; grid-column: span 5;';
                 note.innerText = `Showing first ${limit} of ${displayList.length} trades`;
                 listContainer.appendChild(note);
             }
@@ -1484,6 +1592,9 @@
             // Clear existing chart container HTML
             document.getElementById('main-chart-container').innerHTML = '';
             document.getElementById('rsi-chart-container').innerHTML = '';
+            
+            // Reset connection lines array
+            tradeLinesArray = [];
 
             const currentData = aggregateData(rawM1Data, currentTF);
 
@@ -2128,6 +2239,8 @@
         function updateTradeMarkersForSim(currentSimTime) {
             if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
             
+            clearConnectionLines();
+            
             const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
             const offsetSeconds = offsetHours * 3600;
             
@@ -2139,16 +2252,20 @@
             activePositions.forEach(pos => {
                 const openTimeVal = parseDatetimeStr(pos.openTime);
                 const closeTimeVal = parseDatetimeStr(pos.closeTime);
+                const isBuy = pos.type === 'buy';
+                
+                let openTimeSec = 0;
+                let closeTimeSec = 0;
                 
                 if (openTimeVal > 0) {
-                    const openTimeSec = openTimeVal + offsetSeconds;
+                    openTimeSec = openTimeVal + offsetSeconds;
                     // Only show if the trade has opened BEFORE the current simulation time
                     if (openTimeSec >= minTime && openTimeSec <= currentSimTime) {
                         markers.push({
                             time: openTimeSec,
-                            position: pos.type === 'buy' ? 'belowBar' : 'aboveBar',
-                            color: pos.type === 'buy' ? '#0ecb81' : '#f6465d',
-                            shape: pos.type === 'buy' ? 'arrowUp' : 'arrowDown',
+                            position: isBuy ? 'belowBar' : 'aboveBar',
+                            color: isBuy ? '#2196f3' : '#f44336', // Blue for BUY, Red for SELL
+                            shape: isBuy ? 'arrowUp' : 'arrowDown',
                             text: `${pos.type.toUpperCase()} ${pos.volume} (${pos.comment ? pos.comment.split('|')[2] : 'Grid'})`,
                             profit: 0
                         });
@@ -2156,17 +2273,24 @@
                 }
                 
                 if (closeTimeVal > 0) {
-                    const closeTimeSec = closeTimeVal + offsetSeconds;
+                    closeTimeSec = closeTimeVal + offsetSeconds;
                     // Only show if the trade has closed BEFORE the current simulation time
                     if (closeTimeSec >= minTime && closeTimeSec <= currentSimTime) {
                         markers.push({
                             time: closeTimeSec,
-                            position: pos.type === 'buy' ? 'aboveBar' : 'belowBar',
-                            color: '#ff9800',
+                            position: isBuy ? 'aboveBar' : 'belowBar',
+                            color: isBuy ? '#2196f3' : '#f44336', // Blue for BUY Close, Red for SELL Close
                             shape: 'circle',
                             text: `Close ${pos.type.toUpperCase()}`,
                             profit: pos.profit || 0
                         });
+                    }
+                }
+                
+                // Draw connection lines if the close has occurred before currentSimTime
+                if (openTimeSec > 0 && closeTimeSec > 0) {
+                    if (closeTimeSec >= minTime && closeTimeSec <= currentSimTime) {
+                        drawConnectionLine(pos, openTimeSec, closeTimeSec);
                     }
                 }
             });
