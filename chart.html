@@ -797,7 +797,7 @@
                     <button class="toggle-btn" data-indicator="rsi" onclick="toggleIndicator('rsi')">
                         <i data-lucide="percent"></i> RSI (14)
                     </button>
-                    <button class="toggle-btn active" data-indicator="volume" onclick="toggleIndicator('volume')">
+                    <button class="toggle-btn" data-indicator="volume" onclick="toggleIndicator('volume')">
                         <i data-lucide="bar-chart-2"></i> Volume
                     </button>
                     <button class="toggle-btn" id="replay-mode-toggle-btn" onclick="toggleReplayMode()" style="border-color: rgba(240,185,11,0.3); color: var(--primary-color);">
@@ -924,7 +924,7 @@
             ema: false,
             sma: false,
             rsi: false,
-            volume: true
+            volume: false
         };
 
         // Charts & Series references
@@ -1088,9 +1088,14 @@
                     document.getElementById('stat-symbol').innerText = file.name.split('.')[0].toUpperCase();
                     document.getElementById('stat-timeframe').innerText = "Timeframe: M1 (Custom)";
                     
-                    renderChartWorkspace();
-                    if (rawHistoryData) {
-                        updateTradeMarkers();
+                    const simBar = document.getElementById('simulation-bar');
+                    const isReplayOpen = simBar && simBar.style.display !== 'none';
+                    if (isReplayOpen) {
+                        document.getElementById('sim-start-time').value = formatTimestampToDatetimeLocal(rawM1Data[0].time);
+                        syncSimulationToSelectedTime();
+                    } else {
+                        renderChartWorkspace();
+                        refreshTradeVisuals();
                     }
                     loadingOverlay.style.display = 'none';
                     showToast("Success", `Loaded custom market file: ${file.name}`);
@@ -1995,8 +2000,18 @@
             const labelStr = tf >= 60 ? `${tf/60}h` : `${tf}m`;
             document.getElementById('stat-timeframe').innerText = `Timeframe: ${labelStr}`;
 
-            // Re-render chart
-            renderChartWorkspace();
+            // Re-render chart (preserving replay state if active)
+            const simBar = document.getElementById('simulation-bar');
+            const isReplayOpen = simBar && simBar.style.display !== 'none';
+            
+            if (isReplayOpen) {
+                syncSimulationToSelectedTime();
+            } else {
+                renderChartWorkspace();
+                if (rawHistoryData) {
+                    updateTradeMarkers();
+                }
+            }
         }
 
         // Statistics calculations for the summary cards
