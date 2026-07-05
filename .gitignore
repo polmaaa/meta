@@ -1,0 +1,6 @@
+# MT5 Compiled Executables
+*.ex5
+
+# OS temporary files
+Thumbs.db
+.DS_Store

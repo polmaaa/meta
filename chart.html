@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XAUUSD Interactive Market Chart</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Local Libraries (for offline reliability) -->
+    <script src="lightweight-charts.js"></script>
+    <script src="lucide.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #0b0e11;
+            --surface-color: #151a21;
+            --surface-hover: #1e252f;
+            --border-color: #262f3c;
+            --text-primary: #f0f2f5;
+            --text-secondary: #848e9c;
+            --bullish-color: #0ecb81;
+            --bullish-hover: #03a66d;
+            --bearish-color: #f6465d;
+            --bearish-hover: #cf3046;
+            --primary-color: #f0b90b; /* Gold accent */
+            --primary-hover: #d4a307;
+            --indicator-ema: #2196f3;
+            --indicator-sma: #ff9800;
+            --indicator-rsi: #ab47bc;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-logo i {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+        }
+
+        .header-logo h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header-logo span {
+            background: rgba(240, 185, 11, 0.15);
+            color: var(--primary-color);
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid rgba(240, 185, 11, 0.25);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* File Upload Form Button styling */
+        .file-upload-btn {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .file-upload-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+            background-color: rgba(255,255,255,0.02);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            flex-grow: 1;
+            padding: 1.5rem 2rem;
+            gap: 1.5rem;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Stats Cards Row */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            border-color: rgba(240, 185, 11, 0.2);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-subtext {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-value.up { color: var(--bullish-color); }
+        .stat-value.down { color: var(--bearish-color); }
+
+        /* Chart Workspace Area */
+        .chart-workspace {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+            min-height: 600px;
+            position: relative;
+        }
+
+        /* Toolbar inside chart */
+        .chart-toolbar {
+            background-color: rgba(21, 26, 33, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .toolbar-label {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .btn-group {
+            display: flex;
+            background-color: var(--bg-color);
+            padding: 2px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .toolbar-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .toolbar-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .toolbar-btn.active {
+            background-color: var(--surface-color);
+            color: var(--primary-color);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+
+        .toggle-btn {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
+        .toggle-btn.active[data-indicator="ema"] {
+            border-color: var(--indicator-ema);
+            color: var(--indicator-ema);
+            background-color: rgba(33, 150, 243, 0.05);
+        }
+        .toggle-btn.active[data-indicator="sma"] {
+            border-color: var(--indicator-sma);
+            color: var(--indicator-sma);
+            background-color: rgba(255, 152, 0, 0.05);
+        }
+        .toggle-btn.active[data-indicator="rsi"] {
+            border-color: var(--indicator-rsi);
+            color: var(--indicator-rsi);
+            background-color: rgba(171, 71, 188, 0.05);
+        }
+        .toggle-btn.active[data-indicator="volume"] {
+            border-color: var(--bullish-color);
+            color: var(--bullish-color);
+            background-color: rgba(14, 203, 129, 0.05);
+        }
+
+        /* Tooltip / Status info on Chart */
+        .chart-legend-overlay {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            z-index: 5;
+            background: rgba(21, 26, 33, 0.75);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            pointer-events: none;
+            font-size: 0.75rem;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .legend-row {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item span {
+            color: var(--text-secondary);
+        }
+
+        .legend-item b {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Charts Containers */
+        .charts-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            background-color: #0c0d14;
+        }
+
+        #main-chart-container {
+            flex-grow: 3;
+            width: 100%;
+            position: relative;
+        }
+
+        #rsi-chart-container {
+            flex-grow: 1;
+            width: 100%;
+            border-top: 1px solid var(--border-color);
+            position: relative;
+            display: none; /* Toggle via JS */
+        }
+
+        /* Overlay for uploading / loading state */
+        .chart-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(11, 14, 17, 0.9);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 1.25rem;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .overlay-icon {
+            font-size: 3rem;
+            color: var(--primary-color);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .overlay-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .overlay-description {
+            color: var(--text-secondary);
+            max-width: 450px;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .overlay-btn {
+            background-color: var(--primary-color);
+            color: #000;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(240, 185, 11, 0.25);
+            transition: all 0.2s ease;
+        }
+
+        .overlay-btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(240, 185, 11, 0.4);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(240, 185, 11, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--primary-color);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .toast-title {
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .toast-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Error Details Container */
+        .error-log {
+            color: #f6465d;
+            margin-top: 1rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-width: 500px;
+            text-align: left;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(246, 70, 93, 0.2);
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        .workspace-container {
+            display: flex;
+            gap: 1.5rem;
+            width: 100%;
+            min-height: 650px;
+        }
+
+        .trades-sidebar {
+            width: 380px;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .sidebar-stats {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .sidebar-stat-item {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .sidebar-stat-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .sidebar-stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .trades-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 500px;
+        }
+
+        .trade-item {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .trade-item:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+            background-color: var(--surface-hover);
+        }
+
+        .trade-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .trade-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .trade-badge.buy {
+            background-color: rgba(14, 203, 129, 0.15);
+            color: var(--bullish-color);
+            border: 1px solid rgba(14, 203, 129, 0.25);
+        }
+
+        .trade-badge.sell {
+            background-color: rgba(246, 70, 93, 0.15);
+            color: var(--bearish-color);
+            border: 1px solid rgba(246, 70, 93, 0.25);
+        }
+
+        .trade-profit {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+
+        .trade-profit.up { color: var(--bullish-color); }
+        .trade-profit.down { color: var(--bearish-color); }
+
+        .trade-details {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .trade-time-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .trade-comment {
+            font-family: monospace;
+            font-size: 0.7rem;
+            color: var(--primary-color);
+            margin-top: 0.2rem;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 0.2rem;
+        }
+
+        /* Responsive styling */
+        @media (max-width: 1024px) {
+            .main-container {
+                padding: 1rem;
+            }
+            header {
+                padding: 1rem;
+            }
+            .workspace-container {
+                flex-direction: column;
+            }
+            .trades-sidebar {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .chart-toolbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .toolbar-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-logo">
+            <i data-lucide="trending-up"></i>
+            <h1>XAUUSD Market Analytics</h1>
+            <span>MT5 Data Visualizer</span>
+        </div>
+        <div class="header-controls">
+            <!-- Timezone Offset -->
+            <div style="display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.25rem 0.75rem; background: rgba(0,0,0,0.2);">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Offset:</label>
+                <select id="timezone-offset" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.8125rem; font-weight: 600; outline: none; cursor: pointer;" onchange="updateTradeMarkers()">
+                    <option value="0" style="background: var(--surface-color);">GMT +0 (UTC)</option>
+                    <option value="1" style="background: var(--surface-color);">GMT +1</option>
+                    <option value="2" style="background: var(--surface-color);">GMT +2</option>
+                    <option value="3" selected style="background: var(--surface-color);">GMT +3 (MT5 Server)</option>
+                    <option value="7" style="background: var(--surface-color);">GMT +7</option>
+                </select>
+            </div>
+            
+            <button class="file-upload-btn" onclick="document.getElementById('market-file-input').click()">
+                <i data-lucide="database"></i>
+                Load Market (CSV/JSON)
+            </button>
+            <input type="file" id="market-file-input" accept=".json,.csv" style="display:none;" onchange="handleMarketFileSelect(event)">
+            
+            <button class="file-upload-btn" onclick="document.getElementById('history-file-input').click()">
+                <i data-lucide="history"></i>
+                Load History (JSON)
+            </button>
+            <input type="file" id="history-file-input" accept=".json" style="display:none;" onchange="handleHistoryFileSelect(event)">
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Stats Bar -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Symbol & TF</div>
+                <div class="stat-value" id="stat-symbol">XAUUSD</div>
+                <div class="stat-subtext" id="stat-timeframe">Timeframe: M1</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Last Close Price</div>
+                <div class="stat-value" id="stat-price">--</div>
+                <div class="stat-subtext" id="stat-change">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Highest Range</div>
+                <div class="stat-value" id="stat-high" style="color: var(--bullish-color)">--</div>
+                <div class="stat-subtext">Peak in data range</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Lowest Range</div>
+                <div class="stat-value" id="stat-low" style="color: var(--bearish-color)">--</div>
+                <div class="stat-subtext">Trough in data range</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Data Points</div>
+                <div class="stat-value" id="stat-candles">--</div>
+                <div class="stat-subtext">Aggregated bars</div>
+            </div>
+        </div>
+
+        <div class="workspace-container">
+            <!-- Chart Container -->
+            <div class="chart-workspace" style="flex-grow: 1;">
+                <!-- Loading/Setup Overlay -->
+                <div class="chart-overlay" id="loading-overlay">
+                    <div class="spinner"></div>
+                    <div class="overlay-title">Fetching Market Data...</div>
+                    <div class="overlay-description">Loading the XAUUSD JSON data file.</div>
+                </div>
+
+                <!-- Upload Fail fallback Overlay -->
+                <div class="chart-overlay" id="upload-overlay" style="display: none;">
+                    <i data-lucide="file-text" class="overlay-icon"></i>
+                    <div class="overlay-title" id="overlay-title-text">Load Market and History Data</div>
+                    <div class="overlay-description" id="overlay-desc-text">
+                        Please upload the Gold M1 (CSV/JSON) market data and the MT5 Trade History JSON data to visualize the trading simulation.
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <button class="overlay-btn" onclick="document.getElementById('market-file-input').click()">
+                            <i data-lucide="database"></i> Upload Market Data
+                        </button>
+                        <button class="overlay-btn" style="background-color: var(--text-secondary); color: #000; box-shadow: none;" onclick="document.getElementById('history-file-input').click()">
+                            <i data-lucide="history"></i> Upload Trade History
+                        </button>
+                    </div>
+                    <div class="error-log" id="error-details"></div>
+                </div>
+
+                <!-- Chart Toolbar controls -->
+                <div class="chart-toolbar">
+                    <div class="toolbar-group">
+                        <span class="toolbar-label">Timeframe:</span>
+                        <div class="btn-group">
+                            <button class="toolbar-btn active" onclick="setTimeframe(1, this)">1m</button>
+                            <button class="toolbar-btn" onclick="setTimeframe(5, this)">5m</button>
+                            <button class="toolbar-btn" onclick="setTimeframe(15, this)">15m</button>
+                            <button class="toolbar-btn" onclick="setTimeframe(30, this)">30m</button>
+                            <button class="toolbar-btn" onclick="setTimeframe(60, this)">1h</button>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-group">
+                        <span class="toolbar-label">Technical Indicators:</span>
+                        <button class="toggle-btn" data-indicator="ema" onclick="toggleIndicator('ema')">
+                            <i data-lucide="activity"></i> EMA (20)
+                        </button>
+                        <button class="toggle-btn" data-indicator="sma" onclick="toggleIndicator('sma')">
+                            <i data-lucide="trending-up"></i> SMA (50)
+                        </button>
+                        <button class="toggle-btn" data-indicator="rsi" onclick="toggleIndicator('rsi')">
+                            <i data-lucide="percent"></i> RSI (14)
+                        </button>
+                        <button class="toggle-btn active" data-indicator="volume" onclick="toggleIndicator('volume')">
+                            <i data-lucide="bar-chart-2"></i> Volume
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Legend Overlay inside chart -->
+                <div class="chart-legend-overlay" id="legend">
+                    <div class="legend-row" id="legend-ohlc">
+                        <div class="legend-item" style="color: var(--primary-color)"><strong style="font-size: 0.8rem">XAUUSD</strong></div>
+                        <div class="legend-item">O: <b id="l-open">-</b></div>
+                        <div class="legend-item">H: <b id="l-high">-</b></div>
+                        <div class="legend-item">L: <b id="l-low">-</b></div>
+                        <div class="legend-item">C: <b id="l-close">-</b></div>
+                        <div class="legend-item">V: <b id="l-volume">-</b></div>
+                    </div>
+                    <div class="legend-row" id="legend-indicators" style="margin-top: 0.15rem;">
+                        <div class="legend-item" id="legend-ema" style="display: none; color: var(--indicator-ema);">EMA(20): <b id="l-ema">-</b></div>
+                        <div class="legend-item" id="legend-sma" style="display: none; color: var(--indicator-sma);">SMA(50): <b id="l-sma">-</b></div>
+                        <div class="legend-item" id="legend-rsi" style="display: none; color: var(--indicator-rsi);">RSI(14): <b id="l-rsi">-</b></div>
+                    </div>
+                </div>
+
+                <!-- Charts Render Viewports -->
+                <div class="charts-container">
+                    <div id="main-chart-container"></div>
+                    <div id="rsi-chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Trades Sidebar -->
+            <div class="trades-sidebar" id="trades-sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">Trade History Analyzer</div>
+                    <button class="toggle-btn" style="padding: 0.25rem 0.5rem;" onclick="toggleSidebarView()"><i data-lucide="x"></i></button>
+                </div>
+                <div class="sidebar-stats">
+                    <div class="sidebar-stat-item">
+                        <div class="sidebar-stat-label">Total Trades</div>
+                        <div class="sidebar-stat-value" id="side-total-trades">0</div>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <div class="sidebar-stat-value up" id="side-winrate" style="color: var(--bullish-color)">0%</div>
+                        <div class="sidebar-stat-label">Win Rate</div>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <div class="sidebar-stat-label">Net Profit</div>
+                        <div class="sidebar-stat-value" id="side-net-profit">0.00</div>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <div class="sidebar-stat-label">Profit Factor</div>
+                        <div class="sidebar-stat-value" id="side-profit-factor">0.00</div>
+                    </div>
+                </div>
+                <div class="trades-list" id="sidebar-trades-list">
+                    <!-- Dynamic trade items -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast" id="toast">
+        <div class="toast-content">
+            <div class="toast-title" id="toast-title">File Loaded</div>
+            <div class="toast-desc" id="toast-desc">Successfully rendered chart.</div>
+        </div>
+    </div>
+
+    <!-- Load the external data JS files (bypasses browser CORS block) -->
+    <script src="data.js"></script>
+    <script src="source/trades_history.js"></script>
+
+    <script>
+        // Global variables
+        let rawM1Data = [];      // Stores the parsed raw M1 candlestick data
+        let rawHistoryData = null; // Stores parsed trade history positions/deals
+        let currentTF = 1;       // Current timeframe in minutes
+        let activeIndicators = {
+            ema: false,
+            sma: false,
+            rsi: false,
+            volume: true
+        };
+
+        // Charts & Series references
+        let mainChart, rsiChart;
+        let candleSeries, volumeSeries, emaSeries, smaSeries, rsiSeries;
+        
+        // Element caching
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const uploadOverlay = document.getElementById('upload-overlay');
+        const errorDetails = document.getElementById('error-details');
+
+        // Initialize Lucide icons safely
+        try {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        } catch (e) {
+            console.warn("Lucide failed to load icons", e);
+        }
+
+        // 1. Initial Attempt to Load from data.js or fetch local JSON
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof LightweightCharts === 'undefined') {
+                showCriticalError("Charting Library Failed to Load", "The library 'lightweight-charts.js' could not be loaded. Please ensure the file is present in the folder next to chart.html.");
+                return;
+            }
+
+            if (typeof marketData !== 'undefined' && marketData.length > 0) {
+                try {
+                    rawM1Data = marketData;
+                    document.getElementById('stat-symbol').innerText = "XAUUSD";
+                    document.getElementById('stat-timeframe').innerText = "Timeframe: M1 (Raw)";
+                    renderChartWorkspace();
+                    loadingOverlay.style.display = 'none';
+                    showToast("Success", "Loaded XAUUSD data from data.js.");
+                    loadDefaultTradeHistory();
+                    return;
+                } catch (e) {
+                    console.error("Failed to parse marketData", e);
+                    showJSException(e);
+                }
+            }
+            
+            setTimeout(() => {
+                fetchLocalJSON();
+            }, 500);
+        });
+
+        // Try to automatically load default trades_history (prioritizes JS global to bypass CORS)
+        function loadDefaultTradeHistory() {
+            if (typeof tradesHistory !== 'undefined' && tradesHistory !== null) {
+                rawHistoryData = tradesHistory;
+                updateTradeMarkers();
+                showToast("History Loaded", "Successfully loaded trades_history.js automatically.");
+                return;
+            } else if (window.tradesHistory) {
+                rawHistoryData = window.tradesHistory;
+                updateTradeMarkers();
+                showToast("History Loaded", "Successfully loaded trades_history.js automatically.");
+                return;
+            }
+
+            fetch('source/trades_history.json')
+                .then(res => {
+                    if (res.ok) return res.json();
+                    throw new Error("trades_history.json not found");
+                })
+                .then(data => {
+                    rawHistoryData = data;
+                    updateTradeMarkers();
+                    showToast("History Loaded", "Successfully loaded trades_history.json automatically.");
+                })
+                .catch(e => {
+                    console.log("No default trade history loaded automatically:", e.message);
+                });
+        }
+
+        function showJSException(err) {
+            errorDetails.innerText = "Error Details:\n" + (err.stack || err.message);
+            errorDetails.style.display = 'block';
+        }
+
+        function showCriticalError(title, message) {
+            loadingOverlay.style.display = 'none';
+            uploadOverlay.style.display = 'flex';
+            document.getElementById('overlay-title-text').innerText = title;
+            document.getElementById('overlay-desc-text').innerHTML = message;
+        }
+
+        window.addEventListener('resize', () => {
+            if (mainChart) {
+                const width = document.getElementById('main-chart-container').clientWidth;
+                const mainHeight = document.getElementById('main-chart-container').clientHeight;
+                mainChart.resize(width, mainHeight);
+            }
+            if (rsiChart && activeIndicators.rsi) {
+                const width = document.getElementById('rsi-chart-container').clientWidth;
+                const rsiHeight = document.getElementById('rsi-chart-container').clientHeight;
+                rsiChart.resize(width, rsiHeight);
+            }
+        });
+
+        function fetchLocalJSON() {
+            const jsonUrl = 'data.json';
+            
+            fetch(jsonUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("HTTP error " + response.status + ". data.json might be missing.");
+                    }
+                    return response.json();
+                })
+                .then(jsonData => {
+                    rawM1Data = jsonData;
+                    document.getElementById('stat-symbol').innerText = "XAUUSD";
+                    document.getElementById('stat-timeframe').innerText = "Timeframe: M1 (Raw)";
+                    
+                    renderChartWorkspace();
+                    loadingOverlay.style.display = 'none';
+                    showToast("Success", "Loaded XAUUSD data from data.json.");
+                    loadDefaultTradeHistory();
+                })
+                .catch(error => {
+                    console.warn("Failed to fetch local JSON automatically:", error);
+                    loadingOverlay.style.display = 'none';
+                    uploadOverlay.style.display = 'flex';
+                    showJSException(error);
+                });
+        }
+
+        // Handle uploaded Market File (JSON/CSV)
+        function handleMarketFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            loadingOverlay.style.display = 'flex';
+            uploadOverlay.style.display = 'none';
+            errorDetails.style.display = 'none';
+            loadingOverlay.querySelector('.overlay-title').innerText = "Parsing uploaded market data...";
+            loadingOverlay.querySelector('.overlay-description').innerText = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = parseMarketData(e.target.result, file.name);
+                    rawM1Data = parsed;
+                    
+                    document.getElementById('stat-symbol').innerText = file.name.split('.')[0].toUpperCase();
+                    document.getElementById('stat-timeframe').innerText = "Timeframe: M1 (Custom)";
+                    
+                    renderChartWorkspace();
+                    if (rawHistoryData) {
+                        updateTradeMarkers();
+                    }
+                    loadingOverlay.style.display = 'none';
+                    showToast("Success", `Loaded custom market file: ${file.name}`);
+                } catch (err) {
+                    loadingOverlay.style.display = 'none';
+                    uploadOverlay.style.display = 'flex';
+                    showToast("Error", "Could not parse market data.");
+                    showJSException(err);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Handle uploaded History File (JSON)
+        function handleHistoryFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            loadingOverlay.style.display = 'flex';
+            uploadOverlay.style.display = 'none';
+            errorDetails.style.display = 'none';
+            loadingOverlay.querySelector('.overlay-title').innerText = "Parsing trade history...";
+            loadingOverlay.querySelector('.overlay-description').innerText = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    if (!jsonData.positions && !jsonData.deals) {
+                        throw new Error("JSON structure must contain a 'positions' or 'deals' array.");
+                    }
+                    rawHistoryData = jsonData;
+                    
+                    updateTradeMarkers();
+                    loadingOverlay.style.display = 'none';
+                    showToast("Success", `Loaded trade history: ${file.name}`);
+                } catch (err) {
+                    loadingOverlay.style.display = 'none';
+                    uploadOverlay.style.display = 'flex';
+                    showToast("Error", "Could not parse trade history.");
+                    showJSException(err);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Parse CSV or JSON market text helper
+        function parseMarketData(text, fileName) {
+            if (fileName.endsWith('.json')) {
+                const jsonData = JSON.parse(text);
+                if (!Array.isArray(jsonData)) {
+                    throw new Error("JSON market data must be an array of candle objects.");
+                }
+                return jsonData;
+            } else {
+                const lines = text.split(/\r?\n/);
+                const data = [];
+                let startIndex = 0;
+                
+                if (lines.length > 0 && (lines[0].toLowerCase().includes('date') || lines[0].toLowerCase().includes('<date>'))) {
+                    startIndex = 1;
+                }
+                
+                for (let i = startIndex; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    const cols = line.split(/[,\t;]+/);
+                    if (cols.length < 6) continue;
+                    
+                    const dateStr = cols[0].replace(/\./g, '-');
+                    const timeStr = cols[1];
+                    const timestamp = Date.parse(`${dateStr} ${timeStr}`) / 1000;
+                    
+                    if (isNaN(timestamp)) continue;
+                    
+                    data.push({
+                        time: timestamp,
+                        open: parseFloat(cols[2]),
+                        high: parseFloat(cols[3]),
+                        low: parseFloat(cols[4]),
+                        close: parseFloat(cols[5]),
+                        volume: parseFloat(cols[6]) || 0
+                    });
+                }
+                
+                if (data.length === 0) {
+                    throw new Error("Could not parse any valid rows from the CSV file.");
+                }
+                
+                data.sort((a, b) => a.time - b.time);
+                return data;
+            }
+        }
+
+        // Helper to convert date strings to timestamps
+        function parseDatetimeStr(dtStr) {
+            if (!dtStr || typeof dtStr !== 'string') return 0;
+            const cleanStr = dtStr.replace(/\./g, '-'); // YYYY.MM.DD -> YYYY-MM-DD
+            return Date.parse(cleanStr) / 1000;
+        }
+
+        // Update trade markers and draw on chart
+        function updateTradeMarkers() {
+            if (!candleSeries || typeof candleSeries.setMarkers !== 'function' || !rawHistoryData || rawM1Data.length === 0) return;
+            
+            const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
+            const offsetSeconds = offsetHours * 3600;
+            
+            const minTime = rawM1Data[0].time;
+            const maxTime = rawM1Data[rawM1Data.length - 1].time;
+            
+            const markers = [];
+            const activePositions = rawHistoryData.positions || [];
+            
+            activePositions.forEach(pos => {
+                const openTimeVal = parseDatetimeStr(pos.openTime);
+                const closeTimeVal = parseDatetimeStr(pos.closeTime);
+                
+                if (openTimeVal > 0) {
+                    const openTimeSec = openTimeVal + offsetSeconds;
+                    if (openTimeSec >= minTime && openTimeSec <= maxTime) {
+                        markers.push({
+                            time: openTimeSec,
+                            position: pos.type === 'buy' ? 'belowBar' : 'aboveBar',
+                            color: pos.type === 'buy' ? '#0ecb81' : '#f6465d',
+                            shape: pos.type === 'buy' ? 'arrowUp' : 'arrowDown',
+                            text: `${pos.type.toUpperCase()} ${pos.volume} (${pos.comment ? pos.comment.split('|')[2] : 'Grid'})`,
+                            profit: 0
+                        });
+                    }
+                }
+                
+                if (closeTimeVal > 0) {
+                    const closeTimeSec = closeTimeVal + offsetSeconds;
+                    if (closeTimeSec >= minTime && closeTimeSec <= maxTime) {
+                        markers.push({
+                            time: closeTimeSec,
+                            position: pos.type === 'buy' ? 'aboveBar' : 'belowBar',
+                            color: '#ff9800', // orange for exit / recovery
+                            shape: 'circle',
+                            text: `Close ${pos.type.toUpperCase()}`,
+                            profit: pos.profit || 0
+                        });
+                    }
+                }
+            });
+            
+            // Sort markers by time
+            markers.sort((a, b) => a.time - b.time);
+            
+            // Group overlapping markers (basket closes at same timestamp)
+            const groupedMarkers = groupOverlappingMarkers(markers);
+            
+            candleSeries.setMarkers(groupedMarkers);
+            
+            // Populate sidebar list and stats
+            populateSidebar(activePositions, minTime, maxTime, offsetSeconds);
+        }
+
+        // Avoids label overlay clutter on same timestamp
+        function groupOverlappingMarkers(markers) {
+            const grouped = {};
+            
+            markers.forEach(m => {
+                const key = `${m.time}_${m.position}`;
+                if (!grouped[key]) {
+                    grouped[key] = { ...m, count: 1, totalProfit: m.profit };
+                } else {
+                    grouped[key].count++;
+                    grouped[key].totalProfit += m.profit;
+                    
+                    if (m.text.includes('Close')) {
+                        grouped[key].text = `Close Basket (${grouped[key].count} pos) P/L: ${grouped[key].totalProfit.toFixed(1)}`;
+                        grouped[key].color = '#ff9800';
+                        grouped[key].shape = 'circle';
+                    } else {
+                        grouped[key].text = `${m.text.split(' ')[0]} x${grouped[key].count}`;
+                    }
+                }
+            });
+            
+            return Object.values(grouped);
+        }
+
+        // Scroll the chart timescale to target timestamp
+        function jumpToTime(timestamp) {
+            if (mainChart) {
+                // set visible range centered around the timestamp (+- 4 hours)
+                const rangeHalf = 3600 * 4; 
+                mainChart.timeScale().setVisibleRange({
+                    from: timestamp - rangeHalf,
+                    to: timestamp + rangeHalf
+                });
+                showToast("View Navigated", `Jumped to trade time: ${new Date(timestamp * 1000).toLocaleString()}`);
+            }
+        }
+
+        // Toggle sidebar open/close
+        function toggleSidebarView() {
+            const sidebar = document.getElementById('trades-sidebar');
+            if (sidebar.style.display === 'flex') {
+                sidebar.style.display = 'none';
+            } else {
+                sidebar.style.display = 'flex';
+            }
+            if (mainChart) {
+                setTimeout(() => {
+                    const mainContainer = document.getElementById('main-chart-container');
+                    mainChart.resize(mainContainer.clientWidth, mainContainer.clientHeight);
+                }, 100);
+            }
+        }
+
+        // Render trades sidebar analytics
+        function populateSidebar(positions, minTime, maxTime, offsetSeconds) {
+            const sidebar = document.getElementById('trades-sidebar');
+            const listContainer = document.getElementById('sidebar-trades-list');
+            listContainer.innerHTML = '';
+            
+            // Filter positions relevant to the current loaded market data time boundary
+            const filtered = positions.filter(pos => {
+                const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
+                return openTimeSec >= minTime && openTimeSec <= maxTime;
+            });
+            
+            if (filtered.length === 0) {
+                sidebar.style.display = 'none';
+                return;
+            }
+            
+            // Show sidebar
+            sidebar.style.display = 'flex';
+            if (mainChart) {
+                const mainContainer = document.getElementById('main-chart-container');
+                mainChart.resize(mainContainer.clientWidth, mainContainer.clientHeight);
+            }
+            
+            let netProfit = 0;
+            let wins = 0;
+            let losses = 0;
+            let grossProfit = 0;
+            let grossLoss = 0;
+            
+            filtered.forEach(pos => {
+                netProfit += pos.profit;
+                if (pos.profit >= 0) {
+                    wins++;
+                    grossProfit += pos.profit;
+                } else {
+                    losses++;
+                    grossLoss += Math.abs(pos.profit);
+                }
+                
+                // Add to list UI
+                const item = document.createElement('div');
+                item.className = 'trade-item';
+                const openTimeSec = parseDatetimeStr(pos.openTime) + offsetSeconds;
+                item.onclick = () => jumpToTime(openTimeSec);
+                
+                const isWin = pos.profit >= 0;
+                
+                item.innerHTML = `
+                    <div class="trade-item-header">
+                        <span class="trade-badge ${pos.type}">${pos.type.toUpperCase()}</span>
+                        <span class="trade-profit ${isWin ? 'up' : 'down'}">${pos.profit >= 0 ? '+' : ''}${pos.profit.toFixed(2)}</span>
+                    </div>
+                    <div class="trade-details">
+                        <div class="trade-time-row">
+                            <span>Open: ${pos.openTime} (Price: ${pos.openPrice.toFixed(2)})</span>
+                        </div>
+                        <div class="trade-time-row">
+                            <span>Close: ${pos.closeTime} (Price: ${pos.closePrice.toFixed(2)})</span>
+                        </div>
+                        <span>Lot Size: ${pos.volume}</span>
+                        <div class="trade-comment">${pos.comment || ''}</div>
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+            
+            // Update stats labels
+            const winRate = filtered.length > 0 ? (wins / filtered.length) * 100 : 0;
+            const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : grossProfit > 0 ? 99.9 : 0.0;
+            
+            document.getElementById('side-total-trades').innerText = filtered.length;
+            document.getElementById('side-winrate').innerText = `${winRate.toFixed(1)}%`;
+            document.getElementById('side-winrate').className = `sidebar-stat-value ${winRate >= 50 ? 'up' : 'down'}`;
+            
+            const netProfitVal = document.getElementById('side-net-profit');
+            netProfitVal.innerText = `${netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}`;
+            netProfitVal.className = `sidebar-stat-value ${netProfit >= 0 ? 'up' : 'down'}`;
+            
+            document.getElementById('side-profit-factor').innerText = profitFactor.toFixed(2);
+            document.getElementById('side-profit-factor').className = `sidebar-stat-value ${profitFactor >= 1.0 ? 'up' : 'down'}`;
+        }
+
+        // Aggregates M1 data to different timeframes
+        function aggregateData(m1Data, intervalMinutes) {
+            if (intervalMinutes === 1) {
+                return m1Data.map(d => ({
+                    time: d.time,
+                    open: d.open,
+                    high: d.high,
+                    low: d.low,
+                    close: d.close,
+                    value: d.volume // for volume series compatibility
+                }));
+            }
+
+            const intervalSeconds = intervalMinutes * 60;
+            const grouped = {};
+
+            m1Data.forEach(candle => {
+                const groupTime = Math.floor(candle.time / intervalSeconds) * intervalSeconds;
+                
+                if (!grouped[groupTime]) {
+                    grouped[groupTime] = {
+                        time: groupTime,
+                        open: candle.open,
+                        high: candle.high,
+                        low: candle.low,
+                        close: candle.close,
+                        value: 0
+                    };
+                }
+                
+                grouped[groupTime].high = Math.max(grouped[groupTime].high, candle.high);
+                grouped[groupTime].low = Math.min(grouped[groupTime].low, candle.low);
+                grouped[groupTime].close = candle.close;
+                grouped[groupTime].value += candle.volume;
+            });
+
+            return Object.values(grouped).sort((a, b) => a.time - b.time);
+        }
+
+        // Initialize and draw the main chart and auxiliary chart (RSI)
+        function renderChartWorkspace() {
+            if (typeof LightweightCharts === 'undefined') {
+                throw new Error("LightweightCharts library is not defined. Cannot render chart.");
+            }
+
+            // Clear existing chart container HTML
+            document.getElementById('main-chart-container').innerHTML = '';
+            document.getElementById('rsi-chart-container').innerHTML = '';
+
+            const currentData = aggregateData(rawM1Data, currentTF);
+
+            // 1. Create Main Chart
+            const mainContainer = document.getElementById('main-chart-container');
+            mainChart = LightweightCharts.createChart(mainContainer, {
+                width: mainContainer.clientWidth || 800,
+                height: mainContainer.clientHeight || 400,
+                layout: {
+                    background: { type: 'solid', color: '#0c0d14' },
+                    textColor: '#d1d4dc',
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                },
+                grid: {
+                    vertLines: { color: '#1f222e' },
+                    horzLines: { color: '#1f222e' },
+                },
+                rightPriceScale: {
+                    borderColor: '#2f3241',
+                },
+                timeScale: {
+                    borderColor: '#2f3241',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+            });
+
+            // Add Candlestick Series
+            candleSeries = mainChart.addSeries(LightweightCharts.CandlestickSeries, {
+                upColor: '#0ecb81',
+                downColor: '#f6465d',
+                borderDownColor: '#f6465d',
+                borderUpColor: '#0ecb81',
+                wickDownColor: '#f6465d',
+                wickUpColor: '#0ecb81',
+            });
+            candleSeries.setData(currentData);
+
+            // Add Volume Series as Overlay
+            volumeSeries = mainChart.addSeries(LightweightCharts.HistogramSeries, {
+                color: '#26a69a',
+                priceFormat: {
+                    type: 'volume',
+                },
+                priceScaleId: 'volume-overlay', // overlay
+            });
+            mainChart.priceScale('volume-overlay').applyOptions({
+                scaleMargins: {
+                    top: 0.8,
+                    bottom: 0,
+                },
+            });
+            
+            // Map colors to volume bars (green if candle closes higher, red if lower)
+            const volumeData = currentData.map((d, i) => {
+                const prevClose = i > 0 ? currentData[i-1].close : d.open;
+                const color = d.close >= prevClose ? 'rgba(14, 203, 129, 0.35)' : 'rgba(246, 70, 93, 0.35)';
+                return {
+                    time: d.time,
+                    value: d.value,
+                    color: color
+                };
+            });
+            volumeSeries.setData(volumeData);
+            
+            // Set Volume visibility
+            volumeSeries.applyOptions({
+                visible: activeIndicators.volume
+            });
+
+            // 2. Create Auxiliary RSI Chart
+            const rsiContainer = document.getElementById('rsi-chart-container');
+            rsiChart = LightweightCharts.createChart(rsiContainer, {
+                width: rsiContainer.clientWidth || 800,
+                height: rsiContainer.clientHeight || 150,
+                layout: {
+                    background: { type: 'solid', color: '#0c0d14' },
+                    textColor: '#d1d4dc',
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                },
+                grid: {
+                    vertLines: { color: '#1f222e' },
+                    horzLines: { color: '#1f222e' },
+                },
+                rightPriceScale: {
+                    borderColor: '#2f3241',
+                },
+                timeScale: {
+                    borderColor: '#2f3241',
+                    visible: false, // hide time scale on RSI since they're stacked
+                },
+            });
+
+            rsiSeries = rsiChart.addSeries(LightweightCharts.LineSeries, {
+                color: '#ab47bc',
+                lineWidth: 1.5,
+            });
+
+            // Horizontal Overbought/Oversold indicators
+            rsiSeries.createPriceLine({ price: 70, color: 'rgba(246, 70, 93, 0.4)', lineWidth: 1, lineStyle: 2, title: 'Overbought (70)' });
+            rsiSeries.createPriceLine({ price: 50, color: 'rgba(255, 255, 255, 0.15)', lineWidth: 1, lineStyle: 2 });
+            rsiSeries.createPriceLine({ price: 30, color: 'rgba(14, 203, 129, 0.4)', lineWidth: 1, lineStyle: 2, title: 'Oversold (30)' });
+
+            // Apply Indicators (EMA, SMA, RSI) based on state
+            updateIndicators(currentData);
+
+            // Synchronize Main & RSI time scales
+            let isSyncing = false;
+            mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+                if (isSyncing) return;
+                isSyncing = true;
+                rsiChart.timeScale().setVisibleLogicalRange(range);
+                isSyncing = false;
+            });
+            rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+                if (isSyncing) return;
+                isSyncing = true;
+                mainChart.timeScale().setVisibleLogicalRange(range);
+                isSyncing = false;
+            });
+
+            // Hover crosshair legends updater
+            setupLegendTracker(currentData);
+
+            // Render overall Statistics
+            calculateStats(currentData);
+        }
+
+        // Setup hover legends for precise stats under current pointer
+        function setupLegendTracker(dataList) {
+            const lOpen = document.getElementById('l-open');
+            const lHigh = document.getElementById('l-high');
+            const lLow = document.getElementById('l-low');
+            const lClose = document.getElementById('l-close');
+            const lVolume = document.getElementById('l-volume');
+            const lEma = document.getElementById('l-ema');
+            const lSma = document.getElementById('l-sma');
+            const lRsi = document.getElementById('l-rsi');
+
+            function updateLegend(param) {
+                if (param.time) {
+                    const priceData = param.seriesData.get(candleSeries);
+                    const volData = param.seriesData.get(volumeSeries);
+                    
+                    if (priceData) {
+                        lOpen.innerText = priceData.open.toFixed(2);
+                        lHigh.innerText = priceData.high.toFixed(2);
+                        lLow.innerText = priceData.low.toFixed(2);
+                        lClose.innerText = priceData.close.toFixed(2);
+                        
+                        // Color styling depending on green/red candle
+                        const isBullish = priceData.close >= priceData.open;
+                        const priceColor = isBullish ? 'var(--bullish-color)' : 'var(--bearish-color)';
+                        lOpen.style.color = priceColor;
+                        lHigh.style.color = priceColor;
+                        lLow.style.color = priceColor;
+                        lClose.style.color = priceColor;
+                    }
+                    if (volData) {
+                        lVolume.innerText = volData.value.toLocaleString();
+                    }
+
+                    // Indicator hover values
+                    if (emaSeries && activeIndicators.ema) {
+                        const emaData = param.seriesData.get(emaSeries);
+                        lEma.innerText = emaData ? emaData.value.toFixed(2) : '-';
+                    }
+                    if (smaSeries && activeIndicators.sma) {
+                        const smaData = param.seriesData.get(smaSeries);
+                        lSma.innerText = smaData ? smaData.value.toFixed(2) : '-';
+                    }
+                    if (rsiSeries && activeIndicators.rsi) {
+                        const rsiData = param.seriesData.get(rsiSeries);
+                        lRsi.innerText = rsiData ? rsiData.value.toFixed(1) : '-';
+                    }
+                }
+            }
+
+            mainChart.subscribeCrosshairMove(updateLegend);
+            rsiChart.subscribeCrosshairMove(updateLegend);
+        }
+
+        // Apply selected indicators
+        function updateIndicators(currentData) {
+            // 1. EMA (20)
+            if (activeIndicators.ema) {
+                const emaValues = calculateEMA(currentData, 20);
+                if (!emaSeries) {
+                    emaSeries = mainChart.addSeries(LightweightCharts.LineSeries, {
+                        color: 'rgba(33, 150, 243, 0.85)',
+                        lineWidth: 1.5,
+                        priceLineVisible: false,
+                        lastValueVisible: false,
+                    });
+                }
+                emaSeries.setData(emaValues);
+                emaSeries.applyOptions({ visible: true });
+                document.getElementById('legend-ema').style.display = 'inline-block';
+            } else if (emaSeries) {
+                emaSeries.applyOptions({ visible: false });
+                document.getElementById('legend-ema').style.display = 'none';
+            }
+
+            // 2. SMA (50)
+            if (activeIndicators.sma) {
+                const smaValues = calculateSMA(currentData, 50);
+                if (!smaSeries) {
+                    smaSeries = mainChart.addSeries(LightweightCharts.LineSeries, {
+                        color: 'rgba(255, 152, 0, 0.85)',
+                        lineWidth: 1.5,
+                        priceLineVisible: false,
+                        lastValueVisible: false,
+                    });
+                }
+                smaSeries.setData(smaValues);
+                smaSeries.applyOptions({ visible: true });
+                document.getElementById('legend-sma').style.display = 'inline-block';
+            } else if (smaSeries) {
+                smaSeries.applyOptions({ visible: false });
+                document.getElementById('legend-sma').style.display = 'none';
+            }
+
+            // 3. RSI (14)
+            const rsiPane = document.getElementById('rsi-chart-container');
+            if (activeIndicators.rsi) {
+                const rsiValues = calculateRSI(currentData, 14);
+                rsiSeries.setData(rsiValues);
+                rsiPane.style.display = 'block';
+                rsiSeries.applyOptions({ visible: true });
+                document.getElementById('legend-rsi').style.display = 'inline-block';
+                
+                // Force resize on visibility change
+                const width = document.getElementById('rsi-chart-container').clientWidth;
+                const rsiHeight = document.getElementById('rsi-chart-container').clientHeight;
+                rsiChart.resize(width, rsiHeight);
+            } else {
+                rsiPane.style.display = 'none';
+                document.getElementById('legend-rsi').style.display = 'none';
+            }
+
+            // Resize main chart to balance heights since RSI pane alters DOM dimensions
+            const mainContainer = document.getElementById('main-chart-container');
+            mainChart.resize(mainContainer.clientWidth, mainContainer.clientHeight);
+        }
+
+        // Toggle action handler
+        function toggleIndicator(indicator) {
+            activeIndicators[indicator] = !activeIndicators[indicator];
+            
+            const btn = document.querySelector(`.toggle-btn[data-indicator="${indicator}"]`);
+            if (activeIndicators[indicator]) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+
+            if (indicator === 'volume') {
+                volumeSeries.applyOptions({ visible: activeIndicators.volume });
+            } else {
+                const currentData = aggregateData(rawM1Data, currentTF);
+                updateIndicators(currentData);
+            }
+        }
+
+        // Timeframe selector handler
+        function setTimeframe(tf, elem) {
+            currentTF = tf;
+            
+            // Update UI buttons
+            const buttons = elem.parentNode.querySelectorAll('.toolbar-btn');
+            buttons.forEach(b => b.classList.remove('active'));
+            elem.classList.add('active');
+
+            // Format subtext timeframe name
+            const labelStr = tf >= 60 ? `${tf/60}h` : `${tf}m`;
+            document.getElementById('stat-timeframe').innerText = `Timeframe: ${labelStr}`;
+
+            // Re-render chart
+            renderChartWorkspace();
+        }
+
+        // Statistics calculations for the summary cards
+        function calculateStats(data) {
+            if (data.length === 0) return;
+
+            const firstCandle = data[0];
+            const lastCandle = data[data.length - 1];
+            
+            let highest = data[0].high;
+            let lowest = data[0].low;
+
+            data.forEach(d => {
+                if (d.high > highest) highest = d.high;
+                if (d.low < lowest) lowest = d.low;
+            });
+
+            const netDiff = lastCandle.close - firstCandle.open;
+            const pctDiff = (netDiff / firstCandle.open) * 100;
+
+            const priceVal = document.getElementById('stat-price');
+            const changeVal = document.getElementById('stat-change');
+            
+            priceVal.innerText = lastCandle.close.toFixed(2);
+            changeVal.innerText = `${netDiff >= 0 ? '+' : ''}${netDiff.toFixed(2)} (${netDiff >= 0 ? '+' : ''}${pctDiff.toFixed(2)}%)`;
+            
+            if (netDiff >= 0) {
+                priceVal.className = 'stat-value up';
+                changeVal.className = 'stat-subtext up';
+                changeVal.style.color = 'var(--bullish-color)';
+            } else {
+                priceVal.className = 'stat-value down';
+                changeVal.className = 'stat-subtext down';
+                changeVal.style.color = 'var(--bearish-color)';
+            }
+
+            document.getElementById('stat-high').innerText = highest.toFixed(2);
+            document.getElementById('stat-low').innerText = lowest.toFixed(2);
+            document.getElementById('stat-candles').innerText = data.length.toLocaleString();
+        }
+
+        // Simple Moving Average
+        function calculateSMA(data, period) {
+            const sma = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    continue;
+                }
+                let sum = 0;
+                for (let j = 0; j < period; j++) {
+                    sum += data[i - j].close;
+                }
+                sma.push({
+                    time: data[i].time,
+                    value: sum / period
+                });
+            }
+            return sma;
+        }
+
+        // Exponential Moving Average
+        function calculateEMA(data, period) {
+            const ema = [];
+            if (data.length === 0) return ema;
+            
+            const k = 2 / (period + 1);
+            let emaVal = data[0].close; // Seed EMA with first close
+            
+            ema.push({
+                time: data[0].time,
+                value: emaVal
+            });
+            
+            for (let i = 1; i < data.length; i++) {
+                emaVal = data[i].close * k + emaVal * (1 - k);
+                ema.push({
+                    time: data[i].time,
+                    value: emaVal
+                });
+            }
+            return ema;
+        }
+
+        // Relative Strength Index
+        function calculateRSI(data, period = 14) {
+            const rsi = [];
+            if (data.length < period + 1) return rsi;
+
+            let gains = 0;
+            let losses = 0;
+
+            // First RSI value seed
+            for (let i = 1; i <= period; i++) {
+                const diff = data[i].close - data[i - 1].close;
+                if (diff > 0) {
+                    gains += diff;
+                } else {
+                    losses -= diff;
+                }
+            }
+
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+            
+            let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            rsi.push({
+                time: data[period].time,
+                value: 100 - (100 / (1 + rs))
+            });
+
+            for (let i = period + 1; i < data.length; i++) {
+                const diff = data[i].close - data[i - 1].close;
+                let gain = 0;
+                let loss = 0;
+                if (diff > 0) {
+                    gain = diff;
+                } else {
+                    loss = -diff;
+                }
+
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+                rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                rsi.push({
+                    time: data[i].time,
+                    value: 100 - (100 / (1 + rs))
+                });
+            }
+            return rsi;
+        }
+
+        // Notification Toast triggers
+        function showToast(title, desc) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-desc').innerText = desc;
+            
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
