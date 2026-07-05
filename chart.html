@@ -992,8 +992,7 @@
 
             if (data) {
                 rawHistoryData = data;
-                updateTradeMarkers();
-                triggerSidebarPopulation();
+                refreshTradeVisuals();
                 showToast("History Loaded", "Successfully loaded trades_history.js automatically.");
                 return;
             }
@@ -1005,8 +1004,7 @@
                 })
                 .then(jsonData => {
                     rawHistoryData = jsonData;
-                    updateTradeMarkers();
-                    triggerSidebarPopulation();
+                    refreshTradeVisuals();
                     showToast("History Loaded", "Successfully loaded trades_history.json automatically.");
                 })
                 .catch(e => {
@@ -1123,8 +1121,7 @@
                     }
                     rawHistoryData = jsonData;
                     
-                    updateTradeMarkers();
-                    triggerSidebarPopulation();
+                    refreshTradeVisuals();
                     loadingOverlay.style.display = 'none';
                     showToast("Success", `Loaded trade history: ${file.name}`);
                 } catch (err) {
@@ -1380,6 +1377,20 @@
             }
             
             populateSidebar(rawHistoryData.positions || [], minTime, maxTime, offsetSeconds);
+        }
+
+        // Refresh trade markers and sidebar according to current mode (static vs replay)
+        function refreshTradeVisuals() {
+            if (!rawHistoryData) return;
+            const simBar = document.getElementById('simulation-bar');
+            const isReplayOpen = simBar && simBar.style.display !== 'none';
+            
+            if (isReplayOpen && rawM1Data.length > 0) {
+                const currentSimTime = rawM1Data[simCurrentIndex] ? rawM1Data[simCurrentIndex].time : rawM1Data[0].time;
+                updateTradeMarkersForSim(currentSimTime);
+            } else {
+                updateTradeMarkers();
+            }
         }
 
         // Avoids label overlay clutter on same timestamp
@@ -1641,12 +1652,7 @@
 
         // Triggered when sidebar filter select changes
         function updateSidebarFilter() {
-            if (!rawHistoryData || rawM1Data.length === 0) return;
-            const offsetHours = parseFloat(document.getElementById('timezone-offset').value);
-            const offsetSeconds = offsetHours * 3600;
-            const minTime = rawM1Data[0].time;
-            const maxTime = rawM1Data[rawM1Data.length - 1].time;
-            populateSidebar(rawHistoryData.positions || [], minTime, maxTime, offsetSeconds);
+            refreshTradeVisuals();
         }
 
         // Aggregates M1 data to different timeframes
